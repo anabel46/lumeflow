@@ -23,6 +23,7 @@ const mainNav = [
   { path: "/qualidade", label: "Qualidade", icon: ShieldCheck },
   { path: "/sac", label: "SAC", icon: Headphones },
   { path: "/apontamentos", label: "Apontamentos", icon: ClipboardList },
+  { path: "/relatorios", label: "Relatórios", icon: FileText },
 ];
 
 export default function Sidebar() {
