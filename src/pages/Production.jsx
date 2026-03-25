@@ -344,11 +344,14 @@ export default function Production() {
 
       if (search) {
         const s = search.toLowerCase();
+        const order = orderMap[po.order_id];
         if (
           !po.unique_number?.toLowerCase().includes(s) &&
           !po.product_name?.toLowerCase().includes(s) &&
           !po.order_number?.toLowerCase().includes(s) &&
-          !po.reference?.toLowerCase().includes(s)
+          !po.reference?.toLowerCase().includes(s) &&
+          !order?.client_name?.toLowerCase().includes(s) &&
+          !order?.cost_center?.toLowerCase().includes(s)
         ) return false;
       }
 
