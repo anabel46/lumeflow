@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, CheckCircle2, FileText, AlertTriangle, Play, Clock, Star, ArrowRight, Package, Eye, Store, MapPin } from "lucide-react";
+import { Search, CheckCircle2, AlertTriangle, Play, Clock, Star, ArrowRight, Eye, Store, MapPin, MessageSquare, Package } from "lucide-react";
 import PODetailModal from "@/components/production/PODetailModal";
 import StockDeductionAlert from "@/components/production/StockDeductionAlert";
 import { format, formatDistanceStrict } from "date-fns";
@@ -19,7 +19,7 @@ import { SECTOR_LABELS } from "@/lib/constants";
 const SECTOR_STATUS_COLORS = {
   aguardando: "border-l-amber-400 bg-amber-50/30",
   em_producao: "border-l-blue-500 bg-blue-50/30",
-  concluido: "border-l-emerald-500 bg-emerald-50/20 opacity-80",
+  concluido: "border-l-emerald-500 bg-emerald-50/20",
 };
 
 function StarRating({ value, onChange }) {
@@ -36,7 +36,7 @@ function StarRating({ value, onChange }) {
   );
 }
 
-function OrderCard({ po, sectorId, onStart, onComplete, onDetail }) {
+function OrderCard({ po, onStart, onComplete, onDetail }) {
   const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < new Date();
   const sectorStatus = po.sector_status || "aguardando";
 
@@ -45,82 +45,114 @@ function OrderCard({ po, sectorId, onStart, onComplete, onDetail }) {
       "bg-card rounded-xl border border-l-4 p-4 hover:shadow-md transition-all",
       isOverdue && sectorStatus !== "concluido" ? "border-l-red-500 bg-red-50/20" : SECTOR_STATUS_COLORS[sectorStatus]
     )}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          {/* Header row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
-            {po.is_intermediate && <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">Intermediário</Badge>}
-            {isOverdue && sectorStatus !== "concluido" && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
-          </div>
-
-          {/* Product name */}
-          <p className="font-semibold mt-1.5 text-sm leading-tight">{po.product_name}</p>
-          {po.reference && <p className="text-[11px] text-muted-foreground font-mono">{po.reference}</p>}
-
-          {/* Key info grid */}
-          <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-              <span>Pedido: <strong className="text-foreground">{po.order_number}</strong></span>
-              <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
-              {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
-            </div>
-            {po.complement && (
-              <p>Complemento: <strong className="text-foreground">{po.complement}</strong></p>
-            )}
-            {po.control && (
-              <p>Controle: <strong className="text-foreground">{po.control}</strong></p>
-            )}
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5">
-              {po.cost_center && (
-                <span className="flex items-center gap-1">
-                  <Store className="w-3 h-3" />{po.cost_center}
-                </span>
-              )}
-              {po.environment && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />{po.environment}
-                </span>
-              )}
-              {po.delivery_deadline && (
-                <span className={cn(isOverdue ? "text-red-500 font-semibold" : "")}>
-                  Prazo: {format(new Date(po.delivery_deadline), "dd/MM/yy")}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {po.sector_started_at && sectorStatus === "em_producao" && (
-            <div className="flex items-center gap-1 mt-2 text-xs text-blue-600">
-              <Clock className="w-3 h-3" />
-              <span>Iniciado: {format(new Date(po.sector_started_at), "HH:mm")} ({formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })})</span>
-            </div>
+      {/* Top row: OP number + badges + actions */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold shrink-0">{po.unique_number}</span>
+          {po.is_intermediate && (
+            <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700 shrink-0">
+              <Package className="w-2.5 h-2.5 mr-0.5" />Intermediário
+            </Badge>
+          )}
+          {isOverdue && sectorStatus !== "concluido" && (
+            <Badge variant="outline" className="text-[10px] border-red-300 text-red-600 gap-1 shrink-0">
+              <AlertTriangle className="w-2.5 h-2.5" />Atrasado
+            </Badge>
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-1.5 shrink-0">
-          <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="gap-1 text-xs w-full justify-start">
+        {/* Action buttons */}
+        <div className="flex items-center gap-1 shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-7 px-2 gap-1 text-xs">
             <Eye className="w-3 h-3" /> Detalhes
           </Button>
-          {po.technical_drawing_url && (
-            <a href={po.technical_drawing_url} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="gap-1 text-xs w-full"><FileText className="w-3 h-3" />PDF</Button>
-            </a>
-          )}
           {sectorStatus === "aguardando" && (
-            <Button size="sm" variant="outline" onClick={() => onStart(po)} className="gap-1 text-xs whitespace-nowrap">
+            <Button size="sm" variant="outline" onClick={() => onStart(po)} className="h-7 px-2 gap-1 text-xs">
               <Play className="w-3 h-3" /> Iniciar
             </Button>
           )}
           {sectorStatus === "em_producao" && (
-            <Button size="sm" onClick={() => onComplete(po)} className="gap-1 text-xs whitespace-nowrap">
+            <Button size="sm" onClick={() => onComplete(po)} className="h-7 px-2 gap-1 text-xs">
               <CheckCircle2 className="w-3 h-3" /> Concluir
             </Button>
           )}
-          {sectorStatus === "concluido" && (
-            <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">Concluído</Badge>
-          )}
+        </div>
+      </div>
+
+      {/* Product name + reference */}
+      <p className="font-semibold text-sm leading-tight">{po.product_name}</p>
+      {po.reference && <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{po.reference}</p>}
+
+      {/* Info grid */}
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+        <span>Pedido: <strong className="text-foreground">{po.order_number}</strong></span>
+        <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
+        {po.color && <span className="col-span-2">Cor: <strong className="text-foreground">{po.color}</strong></span>}
+        {po.complement && <span className="col-span-2">Complemento: <strong className="text-foreground">{po.complement}</strong></span>}
+        {po.control && <span className="col-span-2">Controle: <strong className="text-foreground">{po.control}</strong></span>}
+        {po.cost_center && (
+          <span className="flex items-center gap-1">
+            <Store className="w-3 h-3 shrink-0" />{po.cost_center}
+          </span>
+        )}
+        {po.environment && (
+          <span className="flex items-center gap-1">
+            <MapPin className="w-3 h-3 shrink-0" />{po.environment}
+          </span>
+        )}
+        {po.delivery_deadline && (
+          <span className={cn("col-span-2", isOverdue ? "text-red-500 font-semibold" : "")}>
+            Prazo: {format(new Date(po.delivery_deadline), "dd/MM/yy")}
+          </span>
+        )}
+      </div>
+
+      {/* Observations — always visible if present */}
+      {po.observations && (
+        <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+          <MessageSquare className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-800 leading-snug line-clamp-3">{po.observations}</p>
+        </div>
+      )}
+
+      {/* Timer when in production */}
+      {po.sector_started_at && sectorStatus === "em_producao" && (
+        <div className="flex items-center gap-1 mt-2 text-xs text-blue-600 font-medium">
+          <Clock className="w-3 h-3" />
+          <span>
+            Iniciado: {format(new Date(po.sector_started_at), "HH:mm")}
+            {" · "}
+            {formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Ghost card shown in "Concluído" column for OPs that passed through this sector but moved on
+function GhostCard({ po, onDetail }) {
+  return (
+    <div className="bg-muted/40 rounded-xl border border-dashed border-muted-foreground/20 p-3 opacity-70">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-mono text-xs bg-muted-foreground/10 text-muted-foreground px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+            {po.is_intermediate && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground border-muted-foreground/30">Intermediário</Badge>
+            )}
+          </div>
+          <p className="text-sm font-medium text-muted-foreground mt-1 leading-tight">{po.product_name}</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/70 mt-1">
+            <span>Pedido: {po.order_number}</span>
+            <span>Qtd: {po.quantity}</span>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">Concluído</Badge>
+          <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-6 px-2 gap-1 text-[11px] text-muted-foreground">
+            <Eye className="w-3 h-3" /> ver
+          </Button>
         </div>
       </div>
     </div>
@@ -148,8 +180,8 @@ export default function SectorView() {
   const [completing, setCompleting] = useState(null);
   const [completionForm, setCompletionForm] = useState({ observations: "", rating: 0, operator: "" });
   const [detailPO, setDetailPO] = useState(null);
-  const [stockAlert, setStockAlert] = useState(null); // { po, deductions }
-  const [startingPO, setStartingPO] = useState(null); // po pending confirmation
+  const [stockAlert, setStockAlert] = useState(null);
+  const [startingPO, setStartingPO] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: stockItems = [] } = useQuery({
@@ -159,29 +191,43 @@ export default function SectorView() {
 
   const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
 
+  // Active orders currently assigned to this sector
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["sector-orders", sectorId],
     queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: sectorId }),
     refetchInterval: 30000,
   });
 
+  // Completed orders that passed through this sector (moved to next sector or finished)
+  // We look for OPs that are NOT currently in this sector but have this sector in their sequence and have progressed past it
+  const { data: allRelevantOrders = [] } = useQuery({
+    queryKey: ["sector-passed-orders", sectorId],
+    queryFn: async () => {
+      // Get SectorLogs with action="saida" for this sector to find which OPs completed here
+      const logs = await base44.entities.SectorLog.filter({ sector: sectorId, action: "saida" });
+      if (!logs.length) return [];
+      const poIds = [...new Set(logs.map(l => l.production_order_id))];
+      // Fetch those POs — they might be in different sectors now
+      const results = await Promise.all(
+        poIds.map(id => base44.entities.ProductionOrder.filter({ id }).then(r => r?.[0]).catch(() => null))
+      );
+      return results.filter(Boolean).filter(po => po.current_sector !== sectorId);
+    },
+    refetchInterval: 30000,
+  });
+
   // Check stock and show alert before starting
   const handleStartClick = async (po) => {
-    // Only deduce stock on the first sector (step 0)
     if ((po.current_step_index || 0) > 0 || stockItems.length === 0) {
       startMutation.mutate(po);
       return;
     }
-
-    // Try to find bill-of-materials from product components
     const product = await base44.entities.Product.filter({ id: po.product_id }).then(r => r?.[0]).catch(() => null);
     const components = product?.components || [];
-
     if (components.length === 0) {
       startMutation.mutate(po);
       return;
     }
-
     const deductions = components.map(comp => {
       const stockItem = stockItems.find(s => s.code === comp.reference || s.name?.toLowerCase() === comp.name?.toLowerCase());
       const needed = (comp.quantity_per_unit || 1) * (po.quantity || 1);
@@ -197,20 +243,18 @@ export default function SectorView() {
         insufficient: currentStock < needed,
         willBeLow: stockItem && afterStock < (stockItem.minimum_stock || 0) && afterStock >= 0,
       };
-    }).filter(d => d.stockItemId); // only show items that exist in stock
+    }).filter(d => d.stockItemId);
 
     if (deductions.length === 0) {
       startMutation.mutate(po);
       return;
     }
-
     setStartingPO(po);
     setStockAlert({ po, deductions });
   };
 
   const confirmStart = async () => {
     if (!startingPO || !stockAlert) return;
-    // Deduct stock items
     for (const d of stockAlert.deductions) {
       if (!d.stockItemId) continue;
       const item = stockItems.find(s => s.id === d.stockItemId);
@@ -258,7 +302,6 @@ export default function SectorView() {
   const completeMutation = useMutation({
     mutationFn: async ({ po, observations, rating, operator }) => {
       const finishedAt = new Date().toISOString();
-
       await base44.entities.SectorLog.create({
         production_order_id: po.id,
         unique_number: po.unique_number,
@@ -271,10 +314,8 @@ export default function SectorView() {
         finished_at: finishedAt,
         timestamp: finishedAt,
       });
-
       const nextIndex = (po.current_step_index || 0) + 1;
       const sequence = po.production_sequence || [];
-
       if (nextIndex >= sequence.length) {
         return base44.entities.ProductionOrder.update(po.id, {
           current_step_index: nextIndex,
@@ -294,6 +335,7 @@ export default function SectorView() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sector-orders", sectorId] });
+      queryClient.invalidateQueries({ queryKey: ["sector-passed-orders", sectorId] });
       setCompleting(null);
       setCompletionForm({ observations: "", rating: 0, operator: "" });
     },
@@ -310,7 +352,11 @@ export default function SectorView() {
 
   const waiting = filterOrders(productionOrders.filter(po => !po.sector_status || po.sector_status === "aguardando"));
   const inProgress = filterOrders(productionOrders.filter(po => po.sector_status === "em_producao"));
-  const done = filterOrders(productionOrders.filter(po => po.sector_status === "concluido"));
+  // "done" = currently marked concluido in this sector OR passed through (ghost cards)
+  const doneHere = filterOrders(productionOrders.filter(po => po.sector_status === "concluido"));
+  const passed = filterOrders(allRelevantOrders);
+  // Merge, avoid duplicates
+  const doneAll = [...doneHere, ...passed.filter(p => !doneHere.some(d => d.id === p.id))];
 
   return (
     <div className="space-y-6">
@@ -340,7 +386,7 @@ export default function SectorView() {
           </Badge>
           <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-800">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            {done.length} concluídos
+            {doneAll.length} concluídos
           </Badge>
         </div>
       </div>
@@ -386,16 +432,12 @@ export default function SectorView() {
           </KanbanColumn>
 
           {/* Concluído */}
-          <KanbanColumn title="Concluído" color="bg-emerald-500" count={done.length}>
-            {done.length === 0 ? (
+          <KanbanColumn title="Concluído" color="bg-emerald-500" count={doneAll.length}>
+            {doneAll.length === 0 ? (
               <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma concluída</div>
             ) : (
-              done.map(po => (
-                <OrderCard key={po.id} po={po} sectorId={sectorId}
-                  onStart={handleStartClick}
-                  onComplete={setCompleting}
-                  onDetail={setDetailPO}
-                />
+              doneAll.map(po => (
+                <GhostCard key={po.id} po={po} onDetail={setDetailPO} />
               ))
             )}
           </KanbanColumn>
