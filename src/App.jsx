@@ -15,6 +15,7 @@ import Catalog from '@/pages/Catalog';
 import Stock from '@/pages/Stock';
 import Quality from '@/pages/Quality';
 import SectorView from '@/pages/SectorView';
+import Sac from '@/pages/Sac';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
