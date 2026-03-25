@@ -405,6 +405,15 @@ export default function SectorView() {
       {/* Detail Modal */}
       <PODetailModal po={detailPO} open={!!detailPO} onClose={() => setDetailPO(null)} />
 
+      {/* Stock Deduction Alert */}
+      <StockDeductionAlert
+        open={!!stockAlert}
+        onClose={() => { setStockAlert(null); setStartingPO(null); }}
+        onConfirm={confirmStart}
+        deductions={stockAlert?.deductions}
+        loading={startMutation.isPending}
+      />
+
       {/* Complete Dialog */}
       <Dialog open={!!completing} onOpenChange={() => setCompleting(null)}>
         <DialogContent className="max-w-md">
