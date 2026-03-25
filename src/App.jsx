@@ -17,6 +17,7 @@ import Quality from '@/pages/Quality';
 import SectorView from '@/pages/SectorView';
 import Sac from '@/pages/Sac';
 import Appointments from '@/pages/Appointments';
+import Reports from '@/pages/Reports';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
