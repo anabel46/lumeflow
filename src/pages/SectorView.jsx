@@ -408,11 +408,10 @@ export default function SectorView() {
     refetchInterval: 30000,
   });
 
-  // Fetch all orders to get metadata (client, env, obs, deadline)
+  // Fetch all orders to get metadata (client, env, obs, deadline) and approval status
   const { data: allOrders = [] } = useQuery({
     queryKey: ["orders"],
     queryFn: () => base44.entities.Order.list("-created_date", 500),
-    enabled: !isIndividual,
   });
 
   const { data: allRelevantOrders = [] } = useQuery({
