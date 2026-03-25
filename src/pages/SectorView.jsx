@@ -117,6 +117,7 @@ export default function SectorView() {
   const [search, setSearch] = useState("");
   const [completing, setCompleting] = useState(null);
   const [completionForm, setCompletionForm] = useState({ observations: "", rating: 0, operator: "" });
+  const [detailPO, setDetailPO] = useState(null);
   const queryClient = useQueryClient();
 
   const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
