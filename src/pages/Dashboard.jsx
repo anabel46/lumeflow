@@ -1,0 +1,56 @@
+import React from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery } from "@tanstack/react-query";
+import { Factory, ClipboardList, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import StatCard from "@/components/dashboard/StatCard";
+import SectorChart from "@/components/dashboard/SectorChart";
+import DeadlineChart from "@/components/dashboard/DeadlineChart";
+import CompletionStats from "@/components/dashboard/CompletionStats";
+
+export default function Dashboard() {
+  const { data: productionOrders = [] } = useQuery({
+    queryKey: ["production-orders"],
+    queryFn: () => base44.entities.ProductionOrder.list("-created_date", 500),
+  });
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ["orders"],
+    queryFn: () => base44.entities.Order.list("-created_date", 200),
+  });
+
+  const inProduction = productionOrders.filter(po => po.status === "em_producao").length;
+  const totalOrders = orders.length;
+  const now = new Date();
+  const overdue = productionOrders.filter(po =>
+    po.status === "em_producao" && po.delivery_deadline && new Date(po.delivery_deadline) < now
+  ).length;
+  const planning = productionOrders.filter(po => po.status === "planejamento").length;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-1">Visão geral da produção</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Em Produção" value={inProduction} icon={Factory} color="primary" subtitle="ordens ativas" />
+        <StatCard title="Pedidos" value={totalOrders} icon={ClipboardList} color="purple" subtitle="total cadastrado" />
+        <StatCard title="Atrasados" value={overdue} icon={AlertTriangle} color="danger" subtitle="fora do prazo" />
+        <StatCard title="Planejamento" value={planning} icon={Clock} color="warning" subtitle="aguardando início" />
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectorChart productionOrders={productionOrders} />
+        <DeadlineChart productionOrders={productionOrders} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <CompletionStats productionOrders={productionOrders} />
+      </div>
+    </div>
+  );
+}
