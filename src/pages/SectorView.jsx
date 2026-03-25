@@ -301,6 +301,7 @@ export default function SectorView() {
                 <OrderCard key={po.id} po={po} sectorId={sectorId}
                   onStart={(po) => startMutation.mutate(po)}
                   onComplete={setCompleting}
+                  onDetail={setDetailPO}
                 />
               ))
             )}
