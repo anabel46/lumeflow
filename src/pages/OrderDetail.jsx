@@ -176,22 +176,24 @@ export default function OrderDetail() {
                 <div key={po.id} className={cn("bg-card rounded-2xl border p-4", po.is_intermediate && "border-purple-200 bg-purple-50/20 ml-6")}>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {po.is_intermediate && <Package className="w-3.5 h-3.5 text-purple-500" />}
-                        <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{po.unique_number}</span>
-                        <span className="font-semibold">{po.product_name}</span>
-                        {po.color && <Badge variant="outline" className="text-xs">{po.color}</Badge>}
-                        {po.is_intermediate && <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">Intermediário</Badge>}
-                      </div>
-                      <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-                        <span>Ref: {po.reference}</span>
-                        <span>Qtd: {po.quantity}</span>
-                        {po.current_sector && (
-                          <span className="flex items-center gap-1">
-                            <ChevronRight className="w-3 h-3" /> {SECTOR_LABELS[po.current_sector]}
-                          </span>
-                        )}
-                      </div>
+                     <div className="flex items-center gap-2 flex-wrap">
+                       {po.is_intermediate && <Package className="w-3.5 h-3.5 text-purple-500" />}
+                       <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+                       <span className="font-semibold">{po.product_name}</span>
+                       {po.color && <Badge variant="outline" className="text-xs">{po.color}</Badge>}
+                       {po.is_intermediate && <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">Intermediário</Badge>}
+                     </div>
+                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-xs text-muted-foreground">
+                       {po.reference && <span>Ref: <strong className="text-foreground">{po.reference}</strong></span>}
+                       <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
+                       {po.complement && <span>Compl: <strong className="text-foreground">{po.complement}</strong></span>}
+                       {po.control && <span>Controle: <strong className="text-foreground">{po.control}</strong></span>}
+                       {po.current_sector && (
+                         <span className="flex items-center gap-1">
+                           <ChevronRight className="w-3 h-3" /> {SECTOR_LABELS[po.current_sector]}
+                         </span>
+                       )}
+                     </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {po.technical_drawing_url && (
