@@ -38,6 +38,11 @@ export default function OrderDetail() {
     product_id: "", complement: "", control: "", color: "", quantity: 1, observations: ""
   });
 
+  const updateOrderStatusMutation = useMutation({
+    mutationFn: ({ status }) => base44.entities.Order.update(id, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["order", id] }),
+  });
+
   const createPOMutation = useMutation({
     mutationFn: async (data) => {
       const product = products.find(p => p.id === data.product_id);
