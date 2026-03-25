@@ -130,7 +130,12 @@ export default function OrderDetail() {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Prazo de Entrega</p>
-          <p className="font-medium mt-1">{order.delivery_deadline ? format(new Date(order.delivery_deadline), "dd/MM/yyyy") : "-"}</p>
+          <p className="font-medium mt-1">
+            {order.delivery_deadline ? format(new Date(order.delivery_deadline), "dd/MM/yyyy") : "-"}
+            {order.delivery_type === "posterior" && (
+              <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Posterior</span>
+            )}
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Centro de Custo</p>
@@ -142,7 +147,7 @@ export default function OrderDetail() {
         </div>
         {order.observations && (
           <div className="col-span-full">
-            <p className="text-xs text-muted-foreground">Observações</p>
+            <p className="text-xs text-muted-foreground">Observações do Comercial</p>
             <p className="font-medium mt-1">{order.observations}</p>
           </div>
         )}
