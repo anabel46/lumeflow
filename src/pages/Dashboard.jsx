@@ -6,6 +6,10 @@ import StatCard from "@/components/dashboard/StatCard";
 import SectorChart from "@/components/dashboard/SectorChart";
 import DeadlineChart from "@/components/dashboard/DeadlineChart";
 import CompletionStats from "@/components/dashboard/CompletionStats";
+import SectorTodoChart from "@/components/dashboard/SectorTodoChart";
+import DailyCompletionChart from "@/components/dashboard/DailyCompletionChart";
+import MonthlyOrderStats from "@/components/dashboard/MonthlyOrderStats";
+import PeriodSummary from "@/components/dashboard/PeriodSummary";
 
 export default function Dashboard() {
   const { data: productionOrders = [] } = useQuery({
@@ -15,14 +19,14 @@ export default function Dashboard() {
 
   const { data: orders = [] } = useQuery({
     queryKey: ["orders"],
-    queryFn: () => base44.entities.Order.list("-created_date", 200),
+    queryFn: () => base44.entities.Order.list("-created_date", 500),
   });
 
+  const now = new Date();
   const inProduction = productionOrders.filter(po => po.status === "em_producao").length;
   const totalOrders = orders.length;
-  const now = new Date();
   const overdue = productionOrders.filter(po =>
-    po.status === "em_producao" && po.delivery_deadline && new Date(po.delivery_deadline) < now
+    po.status !== "finalizado" && po.delivery_deadline && new Date(po.delivery_deadline) < now
   ).length;
   const planning = productionOrders.filter(po => po.status === "planejamento").length;
 
@@ -42,14 +46,25 @@ export default function Dashboard() {
         <StatCard title="Planejamento" value={planning} icon={Clock} color="warning" subtitle="aguardando início" />
       </div>
 
-      {/* Charts */}
+      {/* Period Summary */}
+      <PeriodSummary productionOrders={productionOrders} orders={orders} />
+
+      {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SectorChart productionOrders={productionOrders} />
-        <DeadlineChart productionOrders={productionOrders} />
+        <SectorTodoChart productionOrders={productionOrders} />
       </div>
 
+      {/* Charts Row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <DeadlineChart productionOrders={productionOrders} />
+        <DailyCompletionChart productionOrders={productionOrders} />
+      </div>
+
+      {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CompletionStats productionOrders={productionOrders} />
+        <MonthlyOrderStats orders={orders} productionOrders={productionOrders} />
       </div>
     </div>
   );
