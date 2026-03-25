@@ -138,14 +138,20 @@ export default function PODetailModal({ po, open, onClose }) {
             )}
           </div>
 
-          {/* PDF */}
+          {/* PDF inline viewer */}
           {po.technical_drawing_url && (
-            <a href={po.technical_drawing_url} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" className="w-full gap-2">
-                <FileText className="w-4 h-4" />
-                Abrir Desenho Técnico (PDF)
-              </Button>
-            </a>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Desenho Técnico
+              </p>
+              <div className="rounded-xl overflow-hidden border bg-muted" style={{ height: 480 }}>
+                <iframe
+                  src={`${po.technical_drawing_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                  className="w-full h-full"
+                  title="Desenho Técnico"
+                />
+              </div>
+            </div>
           )}
         </div>
       </DialogContent>
