@@ -148,7 +148,14 @@ export default function SectorView() {
   const [completing, setCompleting] = useState(null);
   const [completionForm, setCompletionForm] = useState({ observations: "", rating: 0, operator: "" });
   const [detailPO, setDetailPO] = useState(null);
+  const [stockAlert, setStockAlert] = useState(null); // { po, deductions }
+  const [startingPO, setStartingPO] = useState(null); // po pending confirmation
   const queryClient = useQueryClient();
+
+  const { data: stockItems = [] } = useQuery({
+    queryKey: ["stock-items"],
+    queryFn: () => base44.entities.StockItem.list("name", 500),
+  });
 
   const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
 
