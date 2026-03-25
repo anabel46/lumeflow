@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Search, CheckCircle2, FileText, AlertTriangle, Play, Clock, Star, ArrowRight, Package, Eye, Store, MapPin } from "lucide-react";
 import PODetailModal from "@/components/production/PODetailModal";
+import StockDeductionAlert from "@/components/production/StockDeductionAlert";
 import { format, formatDistanceStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
