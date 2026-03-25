@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Search, CheckCircle2, AlertTriangle, Play, Clock, Star,
   Eye, Store, MapPin, MessageSquare, Package, ArrowRight,
-  Wrench, ChevronRight
+  Wrench, ChevronRight, ChevronDown, ExternalLink
 } from "lucide-react";
 import PODetailModal from "@/components/production/PODetailModal";
 import StockDeductionAlert from "@/components/production/StockDeductionAlert";
@@ -19,6 +19,9 @@ import { format, formatDistanceStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { SECTOR_LABELS } from "@/lib/constants";
+
+// Setores que usam visualização individual (por OP), não por pedido
+const INDIVIDUAL_SECTORS = ["estamparia", "tornearia"];
 
 const SECTOR_STATUS_COLORS = {
   aguardando: "border-l-amber-400",
@@ -38,6 +41,7 @@ function StarRating({ value, onChange }) {
   );
 }
 
+// ─── Card individual de OP (estamparia / tornearia) ───────────────────────────
 function OrderCard({ po, onStart, onComplete, onDetail }) {
   const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < new Date() && po.sector_status !== "concluido";
   const sectorStatus = po.sector_status || "aguardando";
@@ -47,7 +51,6 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
       "bg-card rounded-xl border-l-4 border border-border/60 p-3.5 hover:shadow-md transition-all",
       isOverdue ? "border-l-red-500 bg-red-50/10" : SECTOR_STATUS_COLORS[sectorStatus]
     )}>
-      {/* Header: OP + action */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
           <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
@@ -79,11 +82,9 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
         </div>
       </div>
 
-      {/* Product */}
       <p className="font-semibold text-sm leading-tight">{po.product_name}</p>
       {po.reference && <p className="text-[11px] text-muted-foreground font-mono">{po.reference}</p>}
 
-      {/* Info row */}
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
         <Link to={`/pedidos/${po.order_id}`} className="hover:text-primary transition-colors">
           Ped. <strong className="text-foreground">#{po.order_number}</strong>
@@ -93,13 +94,12 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
         {po.cost_center && <span className="flex items-center gap-0.5"><Store className="w-3 h-3" />{po.cost_center}</span>}
         {po.environment && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{po.environment}</span>}
         {po.delivery_deadline && (
-          <span className={cn("flex items-center gap-0.5", isOverdue ? "text-red-500 font-semibold" : "")}>
+          <span className={cn(isOverdue ? "text-red-500 font-semibold" : "")}>
             {format(new Date(po.delivery_deadline), "dd/MM/yy")}
           </span>
         )}
       </div>
 
-      {/* Observations */}
       {po.observations && (
         <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
           <MessageSquare className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
@@ -107,24 +107,28 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
         </div>
       )}
 
-      {/* Timer */}
       {po.sector_started_at && sectorStatus === "em_producao" && (
         <div className="flex items-center gap-1 mt-2 text-xs text-blue-600 font-medium">
           <Clock className="w-3 h-3" />
-          {format(new Date(po.sector_started_at), "HH:mm")}
-          {" · "}
-          {formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })}
+          {format(new Date(po.sector_started_at), "HH:mm")} · {formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })}
         </div>
       )}
 
-      {/* Sequence mini progress */}
       {po.production_sequence?.length > 0 && (
-        <div className="flex items-center gap-0.5 mt-2 overflow-x-auto pb-0.5">
+        <div className="flex items-center gap-0.5 mt-2 overflow-x-auto pb-0.5 no-scrollbar">
           {po.production_sequence.map((s, i) => {
             const isDone = i < (po.current_step_index ?? 0);
             const isCurrent = s === po.current_sector;
             return (
               <React.Fragment key={i}>
+                <span className={cn(
+                  "text-[9px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap",
+                  isDone ? "bg-emerald-100 text-emerald-700" :
+                  isCurrent ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" :
+                  "bg-muted text-muted-foreground/60"
+                )}>
+                  {SECTOR_LABELS[s]?.substring(0, 8) || s}
+                </span>
                 {i < po.production_sequence.length - 1 && (
                   <ChevronRight className="w-2 h-2 text-muted-foreground/30 shrink-0" />
                 )}
@@ -137,6 +141,178 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
   );
 }
 
+// ─── Mini row de OP dentro do card de pedido ──────────────────────────────────
+function PORow({ po, onStart, onComplete, onDetail }) {
+  const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < new Date() && po.sector_status !== "concluido";
+  const sectorStatus = po.sector_status || "aguardando";
+  const isDone = sectorStatus === "concluido";
+
+  return (
+    <div className={cn(
+      "flex items-center gap-2 rounded-lg px-3 py-2 border transition-all",
+      isDone ? "bg-emerald-50/50 border-emerald-100 opacity-75" :
+      sectorStatus === "em_producao" ? "bg-blue-50/50 border-blue-100" :
+      "bg-muted/30 border-border/40",
+      isOverdue && !isDone && "bg-red-50/30 border-red-100"
+    )}>
+      {/* Status dot */}
+      <div className={cn("w-2 h-2 rounded-full shrink-0",
+        isDone ? "bg-emerald-500" :
+        sectorStatus === "em_producao" ? "bg-blue-500 animate-pulse" :
+        "bg-amber-400"
+      )} />
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-mono text-[11px] font-bold text-muted-foreground">{po.unique_number}</span>
+          <span className="text-xs font-medium truncate">{po.product_name}</span>
+          {po.is_intermediate && (
+            <Badge variant="outline" className="text-[9px] border-purple-300 text-purple-600 py-0 px-1">Inter.</Badge>
+          )}
+          {isOverdue && !isDone && (
+            <Badge variant="outline" className="text-[9px] border-red-300 text-red-600 py-0 px-1 gap-0.5">
+              <AlertTriangle className="w-2.5 h-2.5" />Atrasado
+            </Badge>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-x-2 text-[11px] text-muted-foreground mt-0.5">
+          <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
+          {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
+          {po.reference && <span className="font-mono">{po.reference}</span>}
+          {po.complement && <span>{po.complement}</span>}
+          {po.sector_started_at && sectorStatus === "em_producao" && (
+            <span className="text-blue-600 flex items-center gap-0.5">
+              <Clock className="w-2.5 h-2.5" />
+              {formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 shrink-0">
+        <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-6 w-6 p-0">
+          <Eye className="w-3 h-3" />
+        </Button>
+        {sectorStatus === "aguardando" && (
+          <Button size="sm" variant="outline" onClick={() => onStart(po)} className="h-6 px-2 text-[11px] gap-0.5">
+            <Play className="w-2.5 h-2.5" /> Iniciar
+          </Button>
+        )}
+        {sectorStatus === "em_producao" && (
+          <Button size="sm" onClick={() => onComplete(po)} className="h-6 px-2 text-[11px] gap-0.5 bg-emerald-600 hover:bg-emerald-700">
+            <CheckCircle2 className="w-2.5 h-2.5" /> Concluir
+          </Button>
+        )}
+        {isDone && (
+          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">✓</Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Card agrupado por pedido ─────────────────────────────────────────────────
+function OrderGroupCard({ orderNumber, orderId, pos, costCenter, environment, deliveryDeadline, observations, onStart, onComplete, onDetail }) {
+  const [expanded, setExpanded] = useState(true);
+  const now = new Date();
+  const isOverdue = deliveryDeadline && new Date(deliveryDeadline) < now;
+
+  const total = pos.length;
+  const done = pos.filter(p => p.sector_status === "concluido").length;
+  const inProd = pos.filter(p => p.sector_status === "em_producao").length;
+  const allDone = done === total;
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return (
+    <div className={cn(
+      "bg-card rounded-xl border border-border/60 overflow-hidden hover:shadow-md transition-all",
+      isOverdue && !allDone && "border-red-200",
+      allDone && "opacity-70"
+    )}>
+      {/* Header */}
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+        onClick={() => setExpanded(e => !e)}
+      >
+        {/* Left: order info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              to={`/pedidos/${orderId}`}
+              className="font-bold text-sm hover:text-primary transition-colors flex items-center gap-1"
+              onClick={e => e.stopPropagation()}
+            >
+              Pedido #{orderNumber}
+              <ExternalLink className="w-3 h-3 opacity-60" />
+            </Link>
+            {isOverdue && !allDone && (
+              <Badge variant="outline" className="text-[10px] border-red-300 text-red-600 gap-0.5 py-0">
+                <AlertTriangle className="w-2.5 h-2.5" />Atrasado
+              </Badge>
+            )}
+            {allDone && (
+              <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200 py-0">✓ Concluído</Badge>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0 text-[11px] text-muted-foreground mt-0.5">
+            {costCenter && <span className="flex items-center gap-0.5"><Store className="w-2.5 h-2.5" />{costCenter}</span>}
+            {environment && <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{environment}</span>}
+            {deliveryDeadline && (
+              <span className={cn(isOverdue && !allDone ? "text-red-500 font-semibold" : "")}>
+                Prazo: {format(new Date(deliveryDeadline), "dd/MM/yy")}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: progress */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-semibold">{done}/{total} OPs</p>
+            {inProd > 0 && <p className="text-[10px] text-blue-600">{inProd} produzindo</p>}
+          </div>
+          {/* Mini progress ring */}
+          <div className="relative w-8 h-8 shrink-0">
+            <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
+              <circle cx="16" cy="16" r="12" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+              <circle
+                cx="16" cy="16" r="12" fill="none"
+                stroke={allDone ? "hsl(142,71%,45%)" : inProd > 0 ? "hsl(221,83%,53%)" : "hsl(38,92%,50%)"}
+                strokeWidth="4"
+                strokeDasharray={`${(pct / 100) * 75.4} 75.4`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold">{pct}%</span>
+          </div>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+        </div>
+      </button>
+
+      {/* Observation bar */}
+      {observations && (
+        <div className="mx-4 mb-2 flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+          <MessageSquare className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-800 leading-snug line-clamp-2">{observations}</p>
+        </div>
+      )}
+
+      {/* OP rows */}
+      {expanded && (
+        <div className="px-3 pb-3 space-y-1.5">
+          {pos.map(po => (
+            <PORow key={po.id} po={po} onStart={onStart} onComplete={onComplete} onDetail={onDetail} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Ghost card (concluído) ───────────────────────────────────────────────────
 function GhostCard({ po, onDetail }) {
   return (
     <div className="bg-muted/30 rounded-xl border border-dashed border-muted-foreground/20 p-3 opacity-75">
@@ -155,12 +331,41 @@ function GhostCard({ po, onDetail }) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">✓ Concluído</Badge>
+          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">✓</Badge>
           <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-6 px-1.5 text-[11px] text-muted-foreground">
             <Eye className="w-3 h-3" />
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Ghost agrupado por pedido ────────────────────────────────────────────────
+function GhostGroupCard({ orderNumber, orderId, pos, onDetail }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="bg-muted/30 rounded-xl border border-dashed border-muted-foreground/20 overflow-hidden opacity-75">
+      <button
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-muted/40 transition-colors"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div>
+          <p className="font-semibold text-sm text-muted-foreground">Pedido #{orderNumber}</p>
+          <p className="text-[11px] text-muted-foreground/70">{pos.length} OP(s) concluída(s) neste setor</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">✓ Concluído</Badge>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-1.5">
+          {pos.map(po => (
+            <GhostCard key={po.id} po={po} onDetail={onDetail} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -173,13 +378,12 @@ function KanbanColumn({ title, colorClass, count, children }) {
         <span className="font-semibold text-sm">{title}</span>
         <Badge variant="secondary" className="text-xs ml-auto">{count}</Badge>
       </div>
-      <div className="space-y-2.5">
-        {children}
-      </div>
+      <div className="space-y-2.5">{children}</div>
     </div>
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function SectorView() {
   const { sectorId } = useParams();
   const [search, setSearch] = useState("");
@@ -190,17 +394,25 @@ export default function SectorView() {
   const [startingPO, setStartingPO] = useState(null);
   const queryClient = useQueryClient();
 
+  const isIndividual = INDIVIDUAL_SECTORS.includes(sectorId);
+  const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
+
   const { data: stockItems = [] } = useQuery({
     queryKey: ["stock-items"],
     queryFn: () => base44.entities.StockItem.list("name", 500),
   });
 
-  const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
-
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["sector-orders", sectorId],
     queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: sectorId }),
     refetchInterval: 30000,
+  });
+
+  // Fetch all orders to get metadata (client, env, obs, deadline)
+  const { data: allOrders = [] } = useQuery({
+    queryKey: ["orders"],
+    queryFn: () => base44.entities.Order.list("-created_date", 500),
+    enabled: !isIndividual,
   });
 
   const { data: allRelevantOrders = [] } = useQuery({
@@ -223,7 +435,6 @@ export default function SectorView() {
     queryClient.invalidateQueries({ queryKey: ["production-orders"] });
     queryClient.invalidateQueries({ queryKey: ["orders"] });
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
-    queryClient.invalidateQueries({ queryKey: ["sector-chart"] });
   };
 
   const handleStartClick = async (po) => {
@@ -233,10 +444,8 @@ export default function SectorView() {
     }
     const product = await base44.entities.Product.filter({ id: po.product_id }).then(r => r?.[0]).catch(() => null);
     const components = product?.components || [];
-    if (components.length === 0) {
-      startMutation.mutate(po);
-      return;
-    }
+    if (components.length === 0) { startMutation.mutate(po); return; }
+
     const deductions = components.map(comp => {
       const stockItem = stockItems.find(s => s.code === comp.reference || s.name?.toLowerCase() === comp.name?.toLowerCase());
       const needed = (comp.quantity_per_unit || 1) * (po.quantity || 1);
@@ -254,10 +463,7 @@ export default function SectorView() {
       };
     }).filter(d => d.stockItemId);
 
-    if (deductions.length === 0) {
-      startMutation.mutate(po);
-      return;
-    }
+    if (deductions.length === 0) { startMutation.mutate(po); return; }
     setStartingPO(po);
     setStockAlert({ po, deductions });
   };
@@ -311,7 +517,6 @@ export default function SectorView() {
   const completeMutation = useMutation({
     mutationFn: async ({ po, observations, changes, rating, operator }) => {
       const finishedAt = new Date().toISOString();
-      // Merge observations + changes into log
       const fullObs = [observations, changes ? `Alterações: ${changes}` : ""].filter(Boolean).join("\n\n");
       await base44.entities.SectorLog.create({
         production_order_id: po.id,
@@ -366,6 +571,38 @@ export default function SectorView() {
   const passed = filterOrders(allRelevantOrders);
   const doneAll = [...doneHere, ...passed.filter(p => !doneHere.some(d => d.id === p.id))];
 
+  // Group by order for non-individual sectors
+  const groupByOrder = (pos) => {
+    const map = {};
+    pos.forEach(po => {
+      const key = po.order_id || po.order_number;
+      if (!map[key]) {
+        const order = allOrders.find(o => o.id === po.order_id);
+        map[key] = {
+          orderNumber: po.order_number,
+          orderId: po.order_id,
+          costCenter: po.cost_center || order?.cost_center,
+          environment: po.environment || order?.environment,
+          deliveryDeadline: po.delivery_deadline || order?.delivery_deadline,
+          observations: po.observations || order?.observations,
+          pos: [],
+        };
+      }
+      map[key].pos.push(po);
+    });
+    return Object.values(map);
+  };
+
+  // For grouped view: active = waiting + inProgress mixed per order group
+  const activeForGroup = filterOrders(productionOrders.filter(po => po.sector_status !== "concluido"));
+  const activeGroups = groupByOrder(activeForGroup);
+  const doneGroups = groupByOrder(doneAll);
+
+  // Count unique orders for badge
+  const waitingCount = isIndividual ? waiting.length : groupByOrder(waiting).length;
+  const inProgCount = isIndividual ? inProgress.length : groupByOrder(inProgress).length;
+  const doneCount = isIndividual ? doneAll.length : doneGroups.length;
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -376,58 +613,118 @@ export default function SectorView() {
           </div>
           <div>
             <h1 className="text-2xl font-bold">{sectorLabel}</h1>
-            <p className="text-sm text-muted-foreground">{productionOrders.length} {productionOrders.length === 1 ? "ordem" : "ordens"} neste setor</p>
+            <p className="text-sm text-muted-foreground">
+              {isIndividual ? `${productionOrders.length} ordens` : `${activeGroups.length} pedidos · ${productionOrders.length} OPs`} neste setor
+            </p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Badge variant="outline" className="gap-1.5 bg-amber-50 border-amber-200 text-amber-700">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />{waiting.length} aguardando
-          </Badge>
-          <Badge variant="outline" className="gap-1.5 bg-blue-50 border-blue-200 text-blue-700">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{inProgress.length} em produção
-          </Badge>
-          <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-700">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{doneAll.length} concluídos
-          </Badge>
+          {isIndividual ? (
+            <>
+              <Badge variant="outline" className="gap-1.5 bg-amber-50 border-amber-200 text-amber-700">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />{waiting.length} aguardando
+              </Badge>
+              <Badge variant="outline" className="gap-1.5 bg-blue-50 border-blue-200 text-blue-700">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{inProgress.length} em produção
+              </Badge>
+              <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-700">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{doneAll.length} concluídos
+              </Badge>
+            </>
+          ) : (
+            <>
+              <Badge variant="outline" className="gap-1.5 bg-amber-50 border-amber-200 text-amber-700">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />{activeGroups.length} pedidos ativos
+              </Badge>
+              <Badge variant="outline" className="gap-1.5 bg-blue-50 border-blue-200 text-blue-700">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{inProgress.length} OPs em produção
+              </Badge>
+              <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-700">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{doneGroups.length} pedidos concluídos
+              </Badge>
+            </>
+          )}
         </div>
       </div>
 
       {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input placeholder="Buscar OP, produto, referência..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+        <Input placeholder="Buscar OP, produto, pedido..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {isLoading ? (
         <div className="text-center p-8 text-muted-foreground">Carregando...</div>
-      ) : (
+      ) : isIndividual ? (
+        /* ── VISUALIZAÇÃO INDIVIDUAL (estamparia / tornearia) ── */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <KanbanColumn title="Aguardando" colorClass="bg-amber-400" count={waiting.length}>
             {waiting.length === 0
               ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma aguardando</div>
-              : waiting.map(po => (
-                  <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />
-                ))
+              : waiting.map(po => <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />)
             }
           </KanbanColumn>
-
           <KanbanColumn title="Em Produção" colorClass="bg-blue-500" count={inProgress.length}>
             {inProgress.length === 0
               ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma em produção</div>
-              : inProgress.map(po => (
-                  <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />
-                ))
+              : inProgress.map(po => <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />)
             }
           </KanbanColumn>
-
           <KanbanColumn title="Concluído" colorClass="bg-emerald-500" count={doneAll.length}>
             {doneAll.length === 0
               ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma concluída</div>
-              : doneAll.map(po => (
-                  <GhostCard key={po.id} po={po} onDetail={setDetailPO} />
-                ))
+              : doneAll.map(po => <GhostCard key={po.id} po={po} onDetail={setDetailPO} />)
             }
           </KanbanColumn>
+        </div>
+      ) : (
+        /* ── VISUALIZAÇÃO POR PEDIDO (demais setores) ── */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Coluna esquerda: pedidos ativos */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-blue-500" />
+              <span className="font-semibold text-sm">Pedidos Ativos</span>
+              <Badge variant="secondary" className="text-xs ml-auto">{activeGroups.length}</Badge>
+            </div>
+            <div className="space-y-3">
+              {activeGroups.length === 0
+                ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum pedido ativo</div>
+                : activeGroups.map(g => (
+                    <OrderGroupCard
+                      key={g.orderId || g.orderNumber}
+                      {...g}
+                      onStart={handleStartClick}
+                      onComplete={setCompleting}
+                      onDetail={setDetailPO}
+                    />
+                  ))
+              }
+            </div>
+          </div>
+
+          {/* Coluna direita: pedidos concluídos */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-500" />
+              <span className="font-semibold text-sm">Concluídos neste Setor</span>
+              <Badge variant="secondary" className="text-xs ml-auto">{doneGroups.length}</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {doneGroups.length === 0
+                ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum concluído</div>
+                : doneGroups.map(g => (
+                    <GhostGroupCard
+                      key={g.orderId || g.orderNumber}
+                      orderNumber={g.orderNumber}
+                      orderId={g.orderId}
+                      pos={g.pos}
+                      onDetail={setDetailPO}
+                    />
+                  ))
+              }
+            </div>
+          </div>
         </div>
       )}
 
@@ -453,7 +750,6 @@ export default function SectorView() {
           </DialogHeader>
           {completing && (
             <div className="space-y-4">
-              {/* OP summary */}
               <div className="bg-muted/60 rounded-xl p-3 text-sm space-y-0.5">
                 <p className="font-semibold">{completing.unique_number} · {completing.product_name}</p>
                 <p className="text-muted-foreground text-xs">Pedido: {completing.order_number} · Qtd: {completing.quantity}</p>
@@ -464,16 +760,13 @@ export default function SectorView() {
                     {" · "}Início: {format(new Date(completing.sector_started_at), "HH:mm 'de' dd/MM")}
                   </p>
                 )}
-                {/* Next sector preview */}
                 {(() => {
                   const nextIdx = (completing.current_step_index || 0) + 1;
                   const seq = completing.production_sequence || [];
                   const next = seq[nextIdx];
                   return next ? (
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                      Próximo setor: <strong className="text-foreground flex items-center gap-0.5">
-                        <ChevronRight className="w-3 h-3" />{SECTOR_LABELS[next] || next}
-                      </strong>
+                      Próximo: <strong className="text-foreground">{SECTOR_LABELS[next] || next}</strong>
                     </p>
                   ) : (
                     <p className="text-xs text-emerald-600 font-medium mt-1">✓ Último setor — OP será finalizada</p>
@@ -481,7 +774,6 @@ export default function SectorView() {
                 })()}
               </div>
 
-              {/* Operator */}
               <div>
                 <Label className="text-xs">Operador</Label>
                 <Input
@@ -492,7 +784,6 @@ export default function SectorView() {
                 />
               </div>
 
-              {/* Quality rating */}
               <div>
                 <Label className="text-xs">Avaliação da qualidade</Label>
                 <div className="mt-1.5">
@@ -503,7 +794,6 @@ export default function SectorView() {
                 </div>
               </div>
 
-              {/* Changes in item */}
               <div>
                 <Label className="text-xs flex items-center gap-1">
                   <Wrench className="w-3 h-3" /> Mudanças / Ajustes no Item
@@ -511,20 +801,19 @@ export default function SectorView() {
                 <Textarea
                   value={completionForm.changes}
                   onChange={e => setCompletionForm(p => ({ ...p, changes: e.target.value }))}
-                  placeholder="Descreva qualquer alteração feita no item: ajustes de medida, troca de peça, correção de cor, adaptação..."
-                  rows={3}
+                  placeholder="Ajustes de medida, troca de peça, correção de cor..."
+                  rows={2}
                   className="mt-1"
                 />
               </div>
 
-              {/* General observations */}
               <div>
                 <Label className="text-xs">Observações gerais</Label>
                 <Textarea
                   value={completionForm.observations}
                   onChange={e => setCompletionForm(p => ({ ...p, observations: e.target.value }))}
-                  placeholder="O que foi feito, tempo utilizado, problemas encontrados..."
-                  rows={3}
+                  placeholder="O que foi feito, problemas encontrados..."
+                  rows={2}
                   className="mt-1"
                 />
               </div>
