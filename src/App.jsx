@@ -55,6 +55,7 @@ const AuthenticatedApp = () => {
         <Route path="/setor/:sectorId" element={<SectorView />} />
         <Route path="/sac" element={<Sac />} />
         <Route path="/apontamentos" element={<Appointments />} />
+        <Route path="/relatorios" element={<Reports />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
