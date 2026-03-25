@@ -49,7 +49,7 @@ export default function Sidebar() {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto" style={{ overflowAnchor: "none" }}>
         <p className={cn("text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 mb-2 px-3", collapsed && "text-center")}>
           {collapsed ? "•" : "Menu"}
         </p>
