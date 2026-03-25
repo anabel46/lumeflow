@@ -125,14 +125,6 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
             const isCurrent = s === po.current_sector;
             return (
               <React.Fragment key={i}>
-                <span className={cn(
-                  "text-[9px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap",
-                  isDone ? "bg-emerald-100 text-emerald-700" :
-                  isCurrent ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" :
-                  "bg-muted text-muted-foreground/60"
-                )}>
-                  {SECTOR_LABELS[s]?.substring(0, 8) || s}
-                </span>
                 {i < po.production_sequence.length - 1 && (
                   <ChevronRight className="w-2 h-2 text-muted-foreground/30 shrink-0" />
                 )}
