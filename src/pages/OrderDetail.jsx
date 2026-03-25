@@ -235,9 +235,25 @@ export default function OrderDetail() {
               <Select value={itemForm.product_id} onValueChange={(v) => setItemForm(p => ({ ...p, product_id: v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
-                  {products.map(p => <SelectItem key={p.id} value={p.id}>{p.reference} - {p.name}</SelectItem>)}
+                  {products.filter(p => p.category !== "intermediario").map(p => <SelectItem key={p.id} value={p.id}>{p.reference} - {p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {/* Show components preview */}
+              {(() => {
+                const sel = products.find(p => p.id === itemForm.product_id);
+                const comps = sel?.components || [];
+                if (!comps.length) return null;
+                return (
+                  <div className="mt-2 bg-purple-50 border border-purple-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-purple-700 mb-1.5 flex items-center gap-1">
+                      <Package className="w-3 h-3" /> Intermediários gerados automaticamente:
+                    </p>
+                    {comps.map((c, i) => (
+                      <p key={i} className="text-xs text-purple-600">• {c.name} ({c.reference}) × {c.quantity_per_unit} por unidade</p>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Complemento</Label><Input value={itemForm.complement} onChange={e => setItemForm(p => ({ ...p, complement: e.target.value }))} /></div>
