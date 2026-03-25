@@ -1,12 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Play, Pause, ChevronRight, AlertTriangle, Clock, Package, Store, MapPin, Calendar } from "lucide-react";
-import { format, startOfWeek, addWeeks } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Search, Play, Pause, ChevronRight, AlertTriangle, Clock,
+  Package, Store, MapPin, Calendar, ChevronDown, CheckSquare,
+  Square, ExternalLink, X
+} from "lucide-react";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, SECTOR_LABELS } from "@/lib/constants";
@@ -20,13 +24,13 @@ const STATUS_TABS = [
   { value: "finalizado", label: "Finalizado" },
 ];
 
-function ProgressBar({ sequence = [], currentIndex = 0, status, sectorStatus }) {
+function ProgressBar({ sequence = [], currentIndex = 0, status }) {
   const total = sequence.length;
   if (!total) return null;
   const pct = status === "finalizado" ? 100 : Math.round((currentIndex / total) * 100);
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
         <div
           className={cn("h-full rounded-full transition-all", status === "finalizado" ? "bg-emerald-500" : "bg-primary")}
           style={{ width: `${pct}%` }}
@@ -37,92 +41,56 @@ function ProgressBar({ sequence = [], currentIndex = 0, status, sectorStatus }) 
   );
 }
 
-function POCard({ po, onStart, onPause, now }) {
+function PORow({ po, selected, onToggle, onStart, onPause, now }) {
   const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < now && po.status !== "finalizado";
-  const currentSectorLabel = po.current_sector ? SECTOR_LABELS[po.current_sector] : null;
+  const selectable = po.status === "planejamento" || po.status === "em_producao" || po.status === "pausado";
 
   return (
     <div className={cn(
-      "bg-card rounded-xl border p-4 hover:shadow-md transition-all group",
+      "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-all",
+      selected ? "bg-primary/5 border-primary/30" : "bg-card border-border/50 hover:border-border",
       isOverdue && "border-red-200 bg-red-50/20",
-      po.status === "finalizado" && "opacity-70"
+      po.status === "finalizado" && "opacity-60"
     )}>
-      <div className="flex flex-col gap-3">
-        {/* Row 1: Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold shrink-0">{po.unique_number}</span>
-            <Link to={`/pedidos/${po.order_id}`} className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Pedido #{po.order_number}
-            </Link>
-            {po.is_intermediate && (
-              <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700 gap-0.5 shrink-0">
-                <Package className="w-2.5 h-2.5" />Inter.
-              </Badge>
-            )}
-            {isOverdue && (
-              <Badge variant="outline" className="text-[10px] border-red-300 text-red-600 gap-0.5 shrink-0">
-                <AlertTriangle className="w-2.5 h-2.5" />Atrasado
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Badge variant="outline" className={cn("text-xs", STATUS_COLORS[po.status])}>
-              {STATUS_LABELS[po.status]}
-            </Badge>
-            {po.status === "planejamento" && (
-              <Button size="sm" variant="outline" onClick={() => onStart(po)} className="h-7 px-2.5 gap-1 text-xs">
-                <Play className="w-3 h-3" /> Iniciar
-              </Button>
-            )}
-            {po.status === "em_producao" && (
-              <Button size="sm" variant="outline" onClick={() => onPause(po)} className="h-7 px-2.5 gap-1 text-xs">
-                <Pause className="w-3 h-3" /> Pausar
-              </Button>
-            )}
-            {po.status === "pausado" && (
-              <Button size="sm" variant="outline" onClick={() => onStart(po)} className="h-7 px-2.5 gap-1 text-xs text-amber-600 border-amber-300">
-                <Play className="w-3 h-3" /> Retomar
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Row 2: Product info */}
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm leading-tight truncate">{po.product_name}</p>
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
-              {po.reference && <span className="font-mono">{po.reference}</span>}
-              <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
-              {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
-              {po.cost_center && (
-                <span className="flex items-center gap-0.5"><Store className="w-3 h-3" />{po.cost_center}</span>
-              )}
-              {po.environment && (
-                <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{po.environment}</span>
-              )}
-              {po.delivery_deadline && (
-                <span className={cn("flex items-center gap-0.5", isOverdue ? "text-red-500 font-semibold" : "")}>
-                  <Calendar className="w-3 h-3" />
-                  {format(new Date(po.delivery_deadline), "dd/MM/yyyy")}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Row 3: Progress */}
-        <ProgressBar
-          sequence={po.production_sequence}
-          currentIndex={po.current_step_index ?? 0}
-          status={po.status}
-          sectorStatus={po.sector_status}
+      {/* Checkbox */}
+      <div className="mt-0.5 shrink-0">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => selectable && onToggle(po.id)}
+          disabled={!selectable}
+          className="w-3.5 h-3.5"
         />
+      </div>
 
-        {/* Row 4: Sector pills — scrollable horizontal */}
+      {/* Info */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center flex-wrap gap-1.5">
+          <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">{po.unique_number}</span>
+          <span className="text-sm font-semibold truncate">{po.product_name}</span>
+          {po.reference && <span className="text-[11px] text-muted-foreground font-mono">{po.reference}</span>}
+          {po.is_intermediate && (
+            <Badge variant="outline" className="text-[9px] border-purple-300 text-purple-700 py-0 px-1 gap-0.5">
+              <Package className="w-2 h-2" />Inter.
+            </Badge>
+          )}
+          {isOverdue && (
+            <Badge variant="outline" className="text-[9px] border-red-300 text-red-600 py-0 px-1 gap-0.5">
+              <AlertTriangle className="w-2 h-2" />Atrasado
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-x-3 gap-y-0 text-[11px] text-muted-foreground">
+          <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
+          {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
+          {po.complement && <span>{po.complement}</span>}
+          {po.environment && <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{po.environment}</span>}
+        </div>
+
+        <ProgressBar sequence={po.production_sequence} currentIndex={po.current_step_index ?? 0} status={po.status} />
+
         {po.production_sequence?.length > 0 && (
-          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+          <div className="flex items-center gap-0.5 overflow-x-auto pb-0.5 no-scrollbar">
             {po.production_sequence.map((sector, i) => {
               const isDone = i < (po.current_step_index ?? 0);
               const isCurrent = i === (po.current_step_index ?? 0) && po.status === "em_producao";
@@ -130,21 +98,18 @@ function POCard({ po, onStart, onPause, now }) {
               return (
                 <React.Fragment key={i}>
                   <Link to={`/setor/${sector}`}>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity shrink-0",
-                        isDone ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-                        isInProgress ? "bg-blue-100 text-blue-700 border-blue-300 ring-1 ring-blue-300" :
-                        isCurrent ? "bg-amber-100 text-amber-700 border-amber-200" :
-                        "bg-muted/60 text-muted-foreground"
-                      )}
-                    >
+                    <span className={cn(
+                      "text-[9px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap transition-opacity hover:opacity-80 cursor-pointer",
+                      isDone ? "bg-emerald-100 text-emerald-700" :
+                      isInProgress ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" :
+                      isCurrent ? "bg-amber-100 text-amber-700" :
+                      "bg-muted text-muted-foreground/60"
+                    )}>
                       {SECTOR_LABELS[sector]?.substring(0, 10) || sector}
-                    </Badge>
+                    </span>
                   </Link>
                   {i < po.production_sequence.length - 1 && (
-                    <ChevronRight className="w-2.5 h-2.5 text-muted-foreground/40 shrink-0" />
+                    <ChevronRight className="w-2 h-2 text-muted-foreground/30 shrink-0" />
                   )}
                 </React.Fragment>
               );
@@ -152,16 +117,150 @@ function POCard({ po, onStart, onPause, now }) {
           </div>
         )}
 
-        {/* Current sector indicator */}
-        {currentSectorLabel && po.status === "em_producao" && (
-          <div className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2.5 py-1.5 border border-blue-100">
+        {po.current_sector && po.status === "em_producao" && (
+          <div className="flex items-center gap-1 text-[11px] text-blue-600">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            Em: <Link to={`/setor/${po.current_sector}`} className="font-semibold hover:underline">{currentSectorLabel}</Link>
-            {po.sector_status === "em_producao" && <span className="text-blue-400">· produzindo</span>}
-            {po.sector_status === "aguardando" && <span className="text-blue-400">· aguardando</span>}
+            <Link to={`/setor/${po.current_sector}`} className="font-semibold hover:underline">
+              {SECTOR_LABELS[po.current_sector]}
+            </Link>
+            <span className="text-blue-400">· {po.sector_status === "em_producao" ? "produzindo" : "aguardando"}</span>
           </div>
         )}
       </div>
+
+      {/* Status + actions */}
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <Badge variant="outline" className={cn("text-[10px] py-0", STATUS_COLORS[po.status])}>
+          {STATUS_LABELS[po.status]}
+        </Badge>
+        {po.status === "planejamento" && (
+          <Button size="sm" variant="outline" onClick={() => onStart(po)} className="h-6 px-2 text-[11px] gap-0.5">
+            <Play className="w-2.5 h-2.5" /> Iniciar
+          </Button>
+        )}
+        {po.status === "em_producao" && (
+          <Button size="sm" variant="outline" onClick={() => onPause(po)} className="h-6 px-2 text-[11px] gap-0.5">
+            <Pause className="w-2.5 h-2.5" /> Pausar
+          </Button>
+        )}
+        {po.status === "pausado" && (
+          <Button size="sm" variant="outline" onClick={() => onStart(po)} className="h-6 px-2 text-[11px] gap-0.5 text-amber-600 border-amber-300">
+            <Play className="w-2.5 h-2.5" /> Retomar
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrderGroupCard({ group, selectedIds, onToggle, onStart, onPause, onSelectAll, now }) {
+  const [expanded, setExpanded] = useState(true);
+  const { order, pos } = group;
+
+  const isOverdue = order.delivery_deadline && new Date(order.delivery_deadline) < now;
+  const total = pos.length;
+  const done = pos.filter(p => p.status === "finalizado").length;
+  const inProd = pos.filter(p => p.status === "em_producao").length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const selectableIds = pos.filter(p => p.status === "planejamento" || p.status === "em_producao" || p.status === "pausado").map(p => p.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+  const someSelected = selectableIds.some(id => selectedIds.has(id));
+
+  return (
+    <div className={cn(
+      "bg-card rounded-xl border border-border/60 overflow-hidden hover:shadow-sm transition-all",
+      isOverdue && done < total && "border-red-200"
+    )}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Select all checkbox */}
+        <div className="shrink-0" onClick={e => e.stopPropagation()}>
+          <Checkbox
+            checked={allSelected}
+            onCheckedChange={() => onSelectAll(selectableIds, allSelected)}
+            disabled={selectableIds.length === 0}
+            className="w-4 h-4"
+          />
+        </div>
+
+        {/* Toggle expand */}
+        <button className="flex-1 flex items-center gap-3 text-left min-w-0" onClick={() => setExpanded(e => !e)}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link
+                to={`/pedidos/${order.id}`}
+                className="font-bold text-sm hover:text-primary transition-colors flex items-center gap-1"
+                onClick={e => e.stopPropagation()}
+              >
+                Pedido #{order.order_number}
+                <ExternalLink className="w-3 h-3 opacity-50" />
+              </Link>
+              <span className="text-sm font-medium text-foreground truncate">{order.client_name}</span>
+              {isOverdue && done < total && (
+                <Badge variant="outline" className="text-[9px] border-red-300 text-red-600 py-0 px-1 gap-0.5">
+                  <AlertTriangle className="w-2 h-2" />Atrasado
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-0 text-[11px] text-muted-foreground mt-0.5">
+              {order.cost_center && <span className="flex items-center gap-0.5"><Store className="w-2.5 h-2.5" />{order.cost_center}</span>}
+              {order.environment && <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{order.environment}</span>}
+              {order.delivery_deadline && (
+                <span className={cn("flex items-center gap-0.5", isOverdue && done < total ? "text-red-500 font-semibold" : "")}>
+                  <Calendar className="w-2.5 h-2.5" />
+                  {format(new Date(order.delivery_deadline), "dd/MM/yy")}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-semibold">{done}/{total} OPs</p>
+              {inProd > 0 && <p className="text-[10px] text-blue-600">{inProd} produzindo</p>}
+            </div>
+            {/* Mini ring */}
+            <div className="relative w-8 h-8 shrink-0">
+              <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="12" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+                <circle cx="16" cy="16" r="12" fill="none"
+                  stroke={done === total ? "hsl(142,71%,45%)" : inProd > 0 ? "hsl(221,83%,53%)" : "hsl(38,92%,50%)"}
+                  strokeWidth="4"
+                  strokeDasharray={`${(pct / 100) * 75.4} 75.4`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold">{pct}%</span>
+            </div>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+          </div>
+        </button>
+      </div>
+
+      {/* Observations */}
+      {order.observations && (
+        <div className="mx-4 mb-2 px-2.5 py-1.5 bg-amber-50 border border-amber-100 rounded-lg text-xs text-amber-800 line-clamp-2">
+          {order.observations}
+        </div>
+      )}
+
+      {/* PO Rows */}
+      {expanded && (
+        <div className="px-3 pb-3 space-y-1.5">
+          {pos.map(po => (
+            <PORow
+              key={po.id}
+              po={po}
+              selected={selectedIds.has(po.id)}
+              onToggle={onToggle}
+              onStart={onStart}
+              onPause={onPause}
+              now={now}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -169,13 +268,22 @@ function POCard({ po, onStart, onPause, now }) {
 export default function Production() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [weekFilter, setWeekFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
+  const [empresaFilter, setEmpresaFilter] = useState("");
+  const [parceiroFilter, setParceiroFilter] = useState("");
+  const [uniqueFilter, setUniqueFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const queryClient = useQueryClient();
   const now = new Date();
 
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["production-orders"],
     queryFn: () => base44.entities.ProductionOrder.list("-created_date", 500),
+  });
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ["orders"],
+    queryFn: () => base44.entities.Order.list("-created_date", 500),
   });
 
   const updateMutation = useMutation({
@@ -189,25 +297,112 @@ export default function Production() {
   const pauseProduction = (po) =>
     updateMutation.mutate({ id: po.id, data: { status: "pausado" } });
 
-  const weeks = [];
-  for (let i = -2; i <= 6; i++) {
-    const weekStart = startOfWeek(addWeeks(now, i), { weekStartsOn: 1 });
-    weeks.push({
-      label: format(weekStart, "'Semana' dd/MM", { locale: ptBR }),
-      value: format(weekStart, "yyyy-'W'ww"),
-    });
-  }
+  const handleBulkStart = () => {
+    const toStart = productionOrders.filter(
+      po => selectedIds.has(po.id) && (po.status === "planejamento" || po.status === "pausado")
+    );
+    toStart.forEach(startProduction);
+    setSelectedIds(new Set());
+  };
 
-  const filtered = productionOrders.filter(po => {
-    const matchSearch = !search ||
-      po.unique_number?.toLowerCase().includes(search.toLowerCase()) ||
-      po.product_name?.toLowerCase().includes(search.toLowerCase()) ||
-      po.order_number?.toLowerCase().includes(search.toLowerCase()) ||
-      po.reference?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || po.status === statusFilter;
-    const matchWeek = weekFilter === "all" || po.planned_week === weekFilter;
-    return matchSearch && matchStatus && matchWeek;
-  });
+  const handleBulkPause = () => {
+    const toPause = productionOrders.filter(
+      po => selectedIds.has(po.id) && po.status === "em_producao"
+    );
+    toPause.forEach(pauseProduction);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (ids, allSelected) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) ids.forEach(id => next.delete(id));
+      else ids.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  // Build order map for quick lookup
+  const orderMap = useMemo(() => {
+    const m = {};
+    orders.forEach(o => { m[o.id] = o; });
+    return m;
+  }, [orders]);
+
+  // Filter POs
+  const filteredPOs = useMemo(() => {
+    return productionOrders.filter(po => {
+      if (statusFilter !== "all" && po.status !== statusFilter) return false;
+
+      if (search) {
+        const s = search.toLowerCase();
+        if (
+          !po.unique_number?.toLowerCase().includes(s) &&
+          !po.product_name?.toLowerCase().includes(s) &&
+          !po.order_number?.toLowerCase().includes(s) &&
+          !po.reference?.toLowerCase().includes(s)
+        ) return false;
+      }
+
+      if (uniqueFilter) {
+        const u = uniqueFilter.toLowerCase();
+        if (!po.unique_number?.toLowerCase().includes(u)) return false;
+      }
+
+      if (empresaFilter) {
+        const e = empresaFilter.toLowerCase();
+        const order = orderMap[po.order_id];
+        if (
+          !po.cost_center?.toLowerCase().includes(e) &&
+          !order?.cost_center?.toLowerCase().includes(e)
+        ) return false;
+      }
+
+      if (parceiroFilter) {
+        const p = parceiroFilter.toLowerCase();
+        const order = orderMap[po.order_id];
+        if (!order?.client_name?.toLowerCase().includes(p)) return false;
+      }
+
+      if (dateFilter) {
+        const order = orderMap[po.order_id];
+        const deadline = po.delivery_deadline || order?.delivery_deadline;
+        if (!deadline || !deadline.startsWith(dateFilter)) return false;
+      }
+
+      return true;
+    });
+  }, [productionOrders, statusFilter, search, uniqueFilter, empresaFilter, parceiroFilter, dateFilter, orderMap]);
+
+  // Group by order
+  const groups = useMemo(() => {
+    const map = {};
+    filteredPOs.forEach(po => {
+      const key = po.order_id || po.order_number;
+      if (!map[key]) {
+        const order = orderMap[po.order_id] || {
+          id: po.order_id,
+          order_number: po.order_number,
+          client_name: "",
+          cost_center: po.cost_center,
+          environment: po.environment,
+          delivery_deadline: po.delivery_deadline,
+          observations: po.observations,
+        };
+        map[key] = { order, pos: [] };
+      }
+      map[key].pos.push(po);
+    });
+    return Object.values(map);
+  }, [filteredPOs, orderMap]);
 
   const counts = {
     all: productionOrders.length,
@@ -217,8 +412,27 @@ export default function Production() {
     finalizado: productionOrders.filter(p => p.status === "finalizado").length,
   };
 
+  const selectedCanStart = [...selectedIds].some(id => {
+    const po = productionOrders.find(p => p.id === id);
+    return po && (po.status === "planejamento" || po.status === "pausado");
+  });
+  const selectedCanPause = [...selectedIds].some(id => {
+    const po = productionOrders.find(p => p.id === id);
+    return po && po.status === "em_producao";
+  });
+
+  const hasFilters = search || uniqueFilter || empresaFilter || parceiroFilter || dateFilter;
+
+  const clearFilters = () => {
+    setSearch("");
+    setUniqueFilter("");
+    setEmpresaFilter("");
+    setParceiroFilter("");
+    setDateFilter("");
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Produção</h1>
         <p className="text-sm text-muted-foreground">Planejamento e controle de ordens de produção</p>
@@ -238,37 +452,107 @@ export default function Production() {
             )}
           >
             {tab.label}
-            <span className={cn("ml-1.5 text-[10px] opacity-70")}>{counts[tab.value]}</span>
+            <span className="ml-1.5 text-[10px] opacity-70">{counts[tab.value]}</span>
           </button>
         ))}
       </div>
 
-      {/* Search + week filter */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Buscar OP, produto, pedido..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Filters */}
+      <div className="bg-card border rounded-xl p-3 space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {/* Search product/order */}
+          <div className="relative flex-1 min-w-40">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input placeholder="Produto, pedido, ref..." className="pl-8 h-8 text-xs" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          {/* Unique number */}
+          <Input
+            placeholder="Nº único"
+            className="h-8 text-xs w-32"
+            value={uniqueFilter}
+            onChange={e => setUniqueFilter(e.target.value)}
+          />
+          {/* Empresa / cost center */}
+          <Input
+            placeholder="Empresa / loja"
+            className="h-8 text-xs w-36"
+            value={empresaFilter}
+            onChange={e => setEmpresaFilter(e.target.value)}
+          />
+          {/* Parceiro / cliente */}
+          <Input
+            placeholder="Parceiro / cliente"
+            className="h-8 text-xs w-40"
+            value={parceiroFilter}
+            onChange={e => setParceiroFilter(e.target.value)}
+          />
+          {/* Data de movimento (prazo) */}
+          <div className="flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <Input
+              type="date"
+              className="h-8 text-xs w-36"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              title="Filtrar por prazo de entrega"
+            />
+          </div>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 px-2 text-xs gap-1 text-muted-foreground">
+              <X className="w-3.5 h-3.5" /> Limpar
+            </Button>
+          )}
         </div>
-        <Select value={weekFilter} onValueChange={setWeekFilter}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Semana" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas Semanas</SelectItem>
-            {weeks.map(w => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          {groups.length} pedido(s) · {filteredPOs.length} OP(s)
+        </p>
       </div>
 
-      {/* List */}
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 flex-wrap">
+          <span className="text-sm font-medium flex items-center gap-1.5">
+            <CheckSquare className="w-4 h-4 text-primary" />
+            {selectedIds.size} OP(s) selecionada(s)
+          </span>
+          <div className="flex gap-2 ml-auto flex-wrap">
+            {selectedCanStart && (
+              <Button size="sm" onClick={handleBulkStart} className="h-7 gap-1 text-xs">
+                <Play className="w-3 h-3" /> Iniciar selecionadas
+              </Button>
+            )}
+            {selectedCanPause && (
+              <Button size="sm" variant="outline" onClick={handleBulkPause} className="h-7 gap-1 text-xs">
+                <Pause className="w-3 h-3" /> Pausar selecionadas
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())} className="h-7 gap-1 text-xs text-muted-foreground">
+              <X className="w-3 h-3" /> Limpar seleção
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* List grouped by order */}
       <div className="space-y-3">
         {isLoading ? (
           <div className="text-center p-8 text-muted-foreground">Carregando...</div>
-        ) : filtered.length === 0 ? (
+        ) : groups.length === 0 ? (
           <div className="bg-card rounded-2xl border p-8 text-center text-muted-foreground">
-            Nenhuma ordem de produção encontrada
+            Nenhuma ordem encontrada
           </div>
         ) : (
-          filtered.map(po => (
-            <POCard key={po.id} po={po} now={now} onStart={startProduction} onPause={pauseProduction} />
+          groups.map(group => (
+            <OrderGroupCard
+              key={group.order.id || group.order.order_number}
+              group={group}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              onStart={startProduction}
+              onPause={pauseProduction}
+              onSelectAll={handleSelectAll}
+              now={now}
+            />
           ))
         )}
       </div>
