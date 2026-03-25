@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, Package, Factory, Warehouse,
   ShieldCheck, ChevronLeft, ChevronRight, BookOpen,
   Scissors, Flame, Paintbrush, CircleDot, Palette, Sparkles,
-  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, HeadphoneOff, Headphones, FileText
+  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, Headphones, FileText, UserCog
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTORS } from "@/lib/constants";
@@ -22,8 +22,8 @@ const mainNav = [
   { path: "/estoque", label: "Estoque", icon: Warehouse },
   { path: "/qualidade", label: "Qualidade", icon: ShieldCheck },
   { path: "/sac", label: "SAC", icon: Headphones },
-  { path: "/apontamentos", label: "Apontamentos", icon: ClipboardList },
   { path: "/relatorios", label: "Relatórios", icon: FileText },
+  { path: "/administracao", label: "Administração", icon: UserCog },
 ];
 
 export default function Sidebar() {
