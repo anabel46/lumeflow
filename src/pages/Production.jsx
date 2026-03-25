@@ -292,14 +292,17 @@ export default function Production() {
   });
 
   const startProduction = async (po) => {
+    // Block start if parent order is still pending approval
+    const parentOrder = orders.find(o => o.id === po.order_id);
+    if (parentOrder?.status === "aprovacao_pendente") {
+      alert(`O pedido #${po.order_number} ainda está aguardando aprovação do gerente. Não é possível iniciar a produção.`);
+      return;
+    }
     await updateMutation.mutateAsync({ id: po.id, data: { status: "em_producao", started_at: new Date().toISOString() } });
-    // Update parent order status to em_producao if it's not already finalized/cancelled
-    if (po.order_id) {
-      const parentOrder = orders.find(o => o.id === po.order_id);
-      if (parentOrder && !["em_producao", "finalizado", "cancelado"].includes(parentOrder.status)) {
-        await base44.entities.Order.update(po.order_id, { status: "em_producao" });
-        queryClient.invalidateQueries({ queryKey: ["orders"] });
-      }
+    // Update parent order status to em_producao
+    if (po.order_id && parentOrder && !["em_producao", "finalizado", "cancelado"].includes(parentOrder.status)) {
+      await base44.entities.Order.update(po.order_id, { status: "em_producao" });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
     }
   };
 
