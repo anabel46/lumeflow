@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Plus, FileText, Package, ChevronRight } from "lucide-react";
+import ApprovalPanel from "@/components/orders/ApprovalPanel";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, SECTOR_LABELS } from "@/lib/constants";
