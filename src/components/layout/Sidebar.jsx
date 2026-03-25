@@ -21,6 +21,7 @@ const mainNav = [
   { path: "/catalogo", label: "Catálogo", icon: BookOpen },
   { path: "/estoque", label: "Estoque", icon: Warehouse },
   { path: "/qualidade", label: "Qualidade", icon: ShieldCheck },
+  { path: "/sac", label: "SAC", icon: Headphones },
 ];
 
 export default function Sidebar() {
