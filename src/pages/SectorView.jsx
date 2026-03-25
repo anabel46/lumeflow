@@ -324,6 +324,9 @@ export default function SectorView() {
         </div>
       )}
 
+      {/* Detail Modal */}
+      <PODetailModal po={detailPO} open={!!detailPO} onClose={() => setDetailPO(null)} />
+
       {/* Complete Dialog */}
       <Dialog open={!!completing} onOpenChange={() => setCompleting(null)}>
         <DialogContent className="max-w-md">
