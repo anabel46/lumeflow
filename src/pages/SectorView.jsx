@@ -377,7 +377,7 @@ export default function SectorView() {
             ) : (
               inProgress.map(po => (
                 <OrderCard key={po.id} po={po} sectorId={sectorId}
-                  onStart={(po) => startMutation.mutate(po)}
+                  onStart={handleStartClick}
                   onComplete={setCompleting}
                   onDetail={setDetailPO}
                 />
