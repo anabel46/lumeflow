@@ -61,9 +61,23 @@ export default function PODetailModal({ po, open, onClose }) {
             </div>
           </div>
 
+          {/* Product description */}
+          {(product?.description) && (
+            <div className="flex items-start gap-2.5 bg-sky-50 border border-sky-100 rounded-xl p-3">
+              <AlignLeft className="w-3.5 h-3.5 text-sky-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-sky-600 font-medium">Descrição do Produto</p>
+                <p className="text-sm mt-0.5 whitespace-pre-line text-sky-900">{product.description}</p>
+              </div>
+            </div>
+          )}
+
           {/* Order info block */}
           <div className="grid grid-cols-2 gap-3">
             <InfoRow icon={Hash} label="Nº Pedido" value={po.order_number} />
+            {po.request_date && (
+              <InfoRow icon={Calendar} label="Data de Solicitação" value={format(new Date(po.request_date), "dd/MM/yyyy")} />
+            )}
             {po.cost_center && <InfoRow icon={Store} label="Loja / Centro de Custo" value={po.cost_center} />}
             {po.environment && <InfoRow icon={MapPin} label="Ambiente" value={po.environment} />}
             {po.delivery_deadline && (
@@ -76,13 +90,13 @@ export default function PODetailModal({ po, open, onClose }) {
             )}
           </div>
 
-          {/* Observations */}
+          {/* Commercial Observations */}
           {po.observations && (
-            <div className="flex items-start gap-2.5">
-              <MessageSquare className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl p-3">
+              <MessageSquare className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Observações</p>
-                <p className="text-sm mt-0.5 whitespace-pre-line">{po.observations}</p>
+                <p className="text-[10px] uppercase tracking-wider text-amber-600 font-medium">Observações do Comercial</p>
+                <p className="text-sm mt-0.5 whitespace-pre-line text-amber-900">{po.observations}</p>
               </div>
             </div>
           )}
