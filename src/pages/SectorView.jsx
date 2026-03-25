@@ -6,205 +6,354 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, CheckCircle2, FileText, ArrowRight, AlertTriangle } from "lucide-react";
-import { format } from "date-fns";
+import { Search, CheckCircle2, FileText, AlertTriangle, Play, Clock, Star, ArrowRight, Package } from "lucide-react";
+import { format, formatDistanceStrict } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { SECTOR_LABELS } from "@/lib/constants";
 
-const GROUPABLE_SECTORS = ["estamparia", "tornearia"];
+const SECTOR_STATUS_COLORS = {
+  aguardando: "border-l-amber-400 bg-amber-50/30",
+  em_producao: "border-l-blue-500 bg-blue-50/30",
+  concluido: "border-l-emerald-500 bg-emerald-50/20 opacity-80",
+};
+
+function StarRating({ value, onChange }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button key={star} type="button" onClick={() => onChange(star)}>
+          <Star
+            className={cn("w-5 h-5 transition-colors", star <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30")}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function OrderCard({ po, sectorId, onStart, onComplete }) {
+  const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < new Date();
+  const sectorStatus = po.sector_status || "aguardando";
+
+  return (
+    <div className={cn(
+      "bg-card rounded-xl border border-l-4 p-4 hover:shadow-md transition-all",
+      isOverdue && sectorStatus !== "concluido" ? "border-l-red-500 bg-red-50/20" : SECTOR_STATUS_COLORS[sectorStatus]
+    )}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+            {po.is_intermediate && <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">Intermediário</Badge>}
+            {isOverdue && sectorStatus !== "concluido" && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
+          </div>
+          <p className="font-semibold mt-1.5 text-sm">{po.product_name}</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-2 text-xs text-muted-foreground">
+            <span>Pedido: <strong className="text-foreground">{po.order_number}</strong></span>
+            <span>Ref: <strong className="text-foreground">{po.reference || "-"}</strong></span>
+            <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
+            <span>Cor: <strong className="text-foreground">{po.color || "-"}</strong></span>
+            {po.delivery_deadline && (
+              <span className="col-span-2">
+                Prazo: <strong className={cn(isOverdue ? "text-red-500" : "text-foreground")}>
+                  {format(new Date(po.delivery_deadline), "dd/MM/yy")}
+                </strong>
+              </span>
+            )}
+          </div>
+          {po.sector_started_at && sectorStatus === "em_producao" && (
+            <div className="flex items-center gap-1 mt-2 text-xs text-blue-600">
+              <Clock className="w-3 h-3" />
+              <span>Iniciado: {format(new Date(po.sector_started_at), "HH:mm")} ({formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })})</span>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {po.technical_drawing_url && (
+            <a href={po.technical_drawing_url} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm" className="gap-1 text-xs w-full"><FileText className="w-3 h-3" />PDF</Button>
+            </a>
+          )}
+          {sectorStatus === "aguardando" && (
+            <Button size="sm" variant="outline" onClick={() => onStart(po)} className="gap-1 text-xs whitespace-nowrap">
+              <Play className="w-3 h-3" /> Iniciar
+            </Button>
+          )}
+          {sectorStatus === "em_producao" && (
+            <Button size="sm" onClick={() => onComplete(po)} className="gap-1 text-xs whitespace-nowrap">
+              <CheckCircle2 className="w-3 h-3" /> Concluir
+            </Button>
+          )}
+          {sectorStatus === "concluido" && (
+            <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">Concluído</Badge>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KanbanColumn({ title, color, count, children }) {
+  return (
+    <div className="flex-1 min-w-0">
+      <div className={cn("flex items-center gap-2 mb-3 px-1")}>
+        <div className={cn("w-2.5 h-2.5 rounded-full", color)} />
+        <span className="font-semibold text-sm">{title}</span>
+        <Badge variant="secondary" className="text-xs ml-1">{count}</Badge>
+      </div>
+      <div className="space-y-3 min-h-24">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function SectorView() {
   const { sectorId } = useParams();
   const [search, setSearch] = useState("");
   const [completing, setCompleting] = useState(null);
-  const [notes, setNotes] = useState("");
+  const [completionForm, setCompletionForm] = useState({ observations: "", rating: 0, operator: "" });
   const queryClient = useQueryClient();
 
   const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
-  const isGroupable = GROUPABLE_SECTORS.includes(sectorId);
 
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["sector-orders", sectorId],
-    queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: sectorId, status: "em_producao" }),
+    queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: sectorId }),
+    refetchInterval: 30000,
+  });
+
+  const startMutation = useMutation({
+    mutationFn: async (po) => {
+      await base44.entities.SectorLog.create({
+        production_order_id: po.id,
+        unique_number: po.unique_number,
+        sector: sectorId,
+        action: "entrada",
+        started_at: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
+      });
+      return base44.entities.ProductionOrder.update(po.id, {
+        sector_status: "em_producao",
+        sector_started_at: new Date().toISOString(),
+        status: "em_producao",
+        started_at: po.started_at || new Date().toISOString(),
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sector-orders", sectorId] }),
   });
 
   const completeMutation = useMutation({
-    mutationFn: async ({ po, observations }) => {
-      // Log the exit from current sector
+    mutationFn: async ({ po, observations, rating, operator }) => {
+      const finishedAt = new Date().toISOString();
+
       await base44.entities.SectorLog.create({
         production_order_id: po.id,
         unique_number: po.unique_number,
         sector: sectorId,
         action: "saida",
         observations,
-        timestamp: new Date().toISOString(),
+        rating,
+        operator,
+        started_at: po.sector_started_at || null,
+        finished_at: finishedAt,
+        timestamp: finishedAt,
       });
 
       const nextIndex = (po.current_step_index || 0) + 1;
       const sequence = po.production_sequence || [];
 
       if (nextIndex >= sequence.length) {
-        // Production is complete
         return base44.entities.ProductionOrder.update(po.id, {
           current_step_index: nextIndex,
           current_sector: "",
+          sector_status: "concluido",
           status: "finalizado",
-          finished_at: new Date().toISOString(),
+          finished_at: finishedAt,
         });
       } else {
-        // Move to next sector
         return base44.entities.ProductionOrder.update(po.id, {
           current_step_index: nextIndex,
           current_sector: sequence[nextIndex],
+          sector_status: "aguardando",
+          sector_started_at: null,
         });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sector-orders", sectorId] });
       setCompleting(null);
-      setNotes("");
+      setCompletionForm({ observations: "", rating: 0, operator: "" });
     },
   });
 
-  // Group by reference for estamparia/tornearia, sort by oldest request date
-  let displayOrders;
-  if (isGroupable) {
-    const groups = {};
-    productionOrders.forEach(po => {
-      const ref = po.reference || "sem-ref";
-      if (!groups[ref]) groups[ref] = [];
-      groups[ref].push(po);
-    });
-    // Sort each group by request_date
-    Object.values(groups).forEach(group => group.sort((a, b) => new Date(a.request_date || 0) - new Date(b.request_date || 0)));
-    displayOrders = Object.entries(groups).sort(([, a], [, b]) => new Date(a[0]?.request_date || 0) - new Date(b[0]?.request_date || 0));
-  } else {
-    displayOrders = productionOrders.sort((a, b) => (a.order_number || "").localeCompare(b.order_number || ""));
-  }
-
-  const filtered = isGroupable
-    ? displayOrders.filter(([ref, items]) =>
-        ref.toLowerCase().includes(search.toLowerCase()) ||
-        items.some(po => po.order_number?.toLowerCase().includes(search.toLowerCase()) || po.product_name?.toLowerCase().includes(search.toLowerCase()))
-      )
-    : productionOrders.filter(po =>
-        po.order_number?.toLowerCase().includes(search.toLowerCase()) ||
-        po.unique_number?.toLowerCase().includes(search.toLowerCase()) ||
-        po.product_name?.toLowerCase().includes(search.toLowerCase())
-      );
-
-  const now = new Date();
-
-  const OrderCard = ({ po }) => {
-    const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < now;
-    return (
-      <div className={cn("bg-card rounded-xl border p-4 hover:shadow-md transition-all", isOverdue && "border-red-200 bg-red-50/30")}>
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
-              {isOverdue && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
-            </div>
-            <p className="font-semibold mt-1.5 text-sm">{po.product_name}</p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-              <span>Pedido: <strong className="text-foreground">{po.order_number}</strong></span>
-              <span>Ref: <strong className="text-foreground">{po.reference}</strong></span>
-              <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
-              <span>Cor: <strong className="text-foreground">{po.color || "-"}</strong></span>
-              <span>C.Custo: <strong className="text-foreground">{po.cost_center || "-"}</strong></span>
-              <span>Amb: <strong className="text-foreground">{po.environment || "-"}</strong></span>
-              {po.request_date && <span>Solic: <strong className="text-foreground">{format(new Date(po.request_date), "dd/MM/yy")}</strong></span>}
-              {po.delivery_deadline && <span>Prazo: <strong className={cn(isOverdue ? "text-red-500" : "text-foreground")}>{format(new Date(po.delivery_deadline), "dd/MM/yy")}</strong></span>}
-            </div>
-            {po.complement && <p className="text-xs mt-1 text-muted-foreground">Compl: {po.complement}</p>}
-            {po.observations && <p className="text-xs mt-1 text-muted-foreground italic">{po.observations}</p>}
-          </div>
-          <div className="flex flex-col gap-2 ml-3">
-            {po.technical_drawing_url && (
-              <a href={po.technical_drawing_url} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="gap-1 text-xs"><FileText className="w-3 h-3" /> PDF</Button>
-              </a>
-            )}
-            <Button size="sm" onClick={() => setCompleting(po)} className="gap-1 text-xs">
-              <CheckCircle2 className="w-3 h-3" /> Concluir
-            </Button>
-          </div>
-        </div>
-      </div>
+  const filterOrders = (orders) =>
+    orders.filter(po =>
+      !search ||
+      po.order_number?.toLowerCase().includes(search.toLowerCase()) ||
+      po.unique_number?.toLowerCase().includes(search.toLowerCase()) ||
+      po.product_name?.toLowerCase().includes(search.toLowerCase()) ||
+      po.reference?.toLowerCase().includes(search.toLowerCase())
     );
-  };
+
+  const waiting = filterOrders(productionOrders.filter(po => !po.sector_status || po.sector_status === "aguardando"));
+  const inProgress = filterOrders(productionOrders.filter(po => po.sector_status === "em_producao"));
+  const done = filterOrders(productionOrders.filter(po => po.sector_status === "concluido"));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-          <ArrowRight className="w-5 h-5 text-primary-foreground" />
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+            <ArrowRight className="w-5 h-5 text-primary-foreground" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{sectorLabel}</h1>
+            <p className="text-sm text-muted-foreground">
+              {productionOrders.length} {productionOrders.length === 1 ? "ordem" : "ordens"} neste setor
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">{sectorLabel}</h1>
-          <p className="text-sm text-muted-foreground">
-            {productionOrders.length} {productionOrders.length === 1 ? "ordem" : "ordens"} em andamento
-            {isGroupable && " • Agrupado por referência"}
-          </p>
+
+        {/* Summary badges */}
+        <div className="flex gap-2 flex-wrap">
+          <Badge variant="outline" className="gap-1.5 bg-amber-50 border-amber-200 text-amber-800">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            {waiting.length} aguardando
+          </Badge>
+          <Badge variant="outline" className="gap-1.5 bg-blue-50 border-blue-200 text-blue-800">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            {inProgress.length} em produção
+          </Badge>
+          <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-800">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            {done.length} concluídos
+          </Badge>
         </div>
       </div>
 
+      {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input placeholder="Buscar..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder="Buscar por OP, produto, referência..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {isLoading ? (
         <div className="text-center p-8 text-muted-foreground">Carregando...</div>
-      ) : isGroupable ? (
-        <div className="space-y-6">
-          {filtered.length === 0 ? (
-            <div className="bg-card rounded-2xl border p-8 text-center text-muted-foreground">Nenhuma ordem neste setor</div>
-          ) : (
-            filtered.map(([ref, items]) => (
-              <div key={ref}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className="text-xs font-semibold">Ref: {ref}</Badge>
-                  <span className="text-xs text-muted-foreground">{items.length} peças</span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {items.map(po => <OrderCard key={po.id} po={po} />)}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.length === 0 ? (
-            <div className="col-span-full bg-card rounded-2xl border p-8 text-center text-muted-foreground">Nenhuma ordem neste setor</div>
-          ) : (
-            filtered.map(po => <OrderCard key={po.id} po={po} />)
-          )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Aguardando */}
+          <KanbanColumn title="Aguardando" color="bg-amber-400" count={waiting.length}>
+            {waiting.length === 0 ? (
+              <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma ordem aguardando</div>
+            ) : (
+              waiting.map(po => (
+                <OrderCard key={po.id} po={po} sectorId={sectorId}
+                  onStart={(po) => startMutation.mutate(po)}
+                  onComplete={setCompleting}
+                />
+              ))
+            )}
+          </KanbanColumn>
+
+          {/* Em Produção */}
+          <KanbanColumn title="Em Produção" color="bg-blue-500" count={inProgress.length}>
+            {inProgress.length === 0 ? (
+              <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma em produção</div>
+            ) : (
+              inProgress.map(po => (
+                <OrderCard key={po.id} po={po} sectorId={sectorId}
+                  onStart={(po) => startMutation.mutate(po)}
+                  onComplete={setCompleting}
+                />
+              ))
+            )}
+          </KanbanColumn>
+
+          {/* Concluído */}
+          <KanbanColumn title="Concluído" color="bg-emerald-500" count={done.length}>
+            {done.length === 0 ? (
+              <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma concluída</div>
+            ) : (
+              done.map(po => (
+                <OrderCard key={po.id} po={po} sectorId={sectorId}
+                  onStart={(po) => startMutation.mutate(po)}
+                  onComplete={setCompleting}
+                />
+              ))
+            )}
+          </KanbanColumn>
         </div>
       )}
 
       {/* Complete Dialog */}
       <Dialog open={!!completing} onOpenChange={() => setCompleting(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Concluir Etapa - {sectorLabel}</DialogTitle>
+            <DialogTitle>Concluir Etapa — {sectorLabel}</DialogTitle>
           </DialogHeader>
           {completing && (
             <div className="space-y-4">
               <div className="bg-muted rounded-lg p-3 text-sm">
-                <p><strong>{completing.unique_number}</strong> - {completing.product_name}</p>
-                <p className="text-muted-foreground mt-1">Pedido: {completing.order_number} | Qtd: {completing.quantity}</p>
+                <p className="font-semibold">{completing.unique_number} — {completing.product_name}</p>
+                <p className="text-muted-foreground mt-0.5">Pedido: {completing.order_number} | Qtd: {completing.quantity}</p>
+                {completing.sector_started_at && (
+                  <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Início: {format(new Date(completing.sector_started_at), "HH:mm 'de' dd/MM")}
+                    {" · "}
+                    Duração: {formatDistanceStrict(new Date(completing.sector_started_at), new Date(), { locale: ptBR })}
+                  </p>
+                )}
               </div>
+
               <div>
-                <p className="text-sm font-medium mb-1">Observações</p>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observações opcionais..." rows={3} />
+                <Label>Operador</Label>
+                <Input
+                  placeholder="Nome do operador..."
+                  value={completionForm.operator}
+                  onChange={(e) => setCompletionForm(p => ({ ...p, operator: e.target.value }))}
+                  className="mt-1"
+                />
               </div>
+
+              <div>
+                <Label>Avaliação da qualidade</Label>
+                <div className="mt-2">
+                  <StarRating
+                    value={completionForm.rating}
+                    onChange={(v) => setCompletionForm(p => ({ ...p, rating: v }))}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {["", "Ruim", "Regular", "Bom", "Muito Bom", "Excelente"][completionForm.rating] || "Selecione a avaliação"}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label>Observações / Comentários</Label>
+                <Textarea
+                  value={completionForm.observations}
+                  onChange={(e) => setCompletionForm(p => ({ ...p, observations: e.target.value }))}
+                  placeholder="Descreva o que foi feito, problemas encontrados, ajustes realizados..."
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setCompleting(null)}>Cancelar</Button>
-                <Button onClick={() => completeMutation.mutate({ po: completing, observations: notes })} className="gap-1">
-                  <CheckCircle2 className="w-4 h-4" /> Confirmar Conclusão
+                <Button
+                  onClick={() => completeMutation.mutate({ po: completing, ...completionForm })}
+                  disabled={completeMutation.isPending}
+                  className="gap-1"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {completeMutation.isPending ? "Salvando..." : "Confirmar Conclusão"}
                 </Button>
               </div>
             </div>
