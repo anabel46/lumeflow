@@ -23,6 +23,13 @@ function InfoRow({ icon: IconComp, label, value, className }) {
 }
 
 export default function PODetailModal({ po, open, onClose }) {
+  const { data: product } = useQuery({
+    queryKey: ["product", po?.product_id],
+    queryFn: () => base44.entities.Product.filter({ id: po.product_id }),
+    enabled: !!po?.product_id,
+    select: (data) => data?.[0],
+  });
+
   if (!po) return null;
 
   return (
