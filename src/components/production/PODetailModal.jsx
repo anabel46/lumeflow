@@ -7,11 +7,11 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { SECTOR_LABELS, STATUS_LABELS, STATUS_COLORS } from "@/lib/constants";
 
-function InfoRow({ icon: Icon, label, value, className }) {
+function InfoRow({ icon: IconComp, label, value, className }) {
   if (!value) return null;
   return (
     <div className="flex items-start gap-2.5">
-      <Icon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+      <IconComp className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
       <div>
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
         <p className={cn("text-sm font-medium", className)}>{value}</p>
