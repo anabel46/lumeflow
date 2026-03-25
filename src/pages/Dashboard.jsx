@@ -10,6 +10,7 @@ import SectorTodoChart from "@/components/dashboard/SectorTodoChart";
 import DailyCompletionChart from "@/components/dashboard/DailyCompletionChart";
 import MonthlyOrderStats from "@/components/dashboard/MonthlyOrderStats";
 import PeriodSummary from "@/components/dashboard/PeriodSummary";
+import EfficiencyChart from "@/components/dashboard/EfficiencyChart";
 
 export default function Dashboard() {
   const { data: productionOrders = [] } = useQuery({
@@ -66,6 +67,9 @@ export default function Dashboard() {
         <CompletionStats productionOrders={productionOrders} />
         <MonthlyOrderStats orders={orders} productionOrders={productionOrders} />
       </div>
+
+      {/* Efficiency Row */}
+      <EfficiencyChart />
     </div>
   );
 }
