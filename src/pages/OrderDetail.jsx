@@ -154,6 +154,9 @@ export default function OrderDetail() {
         )}
       </div>
 
+      {/* Approval Panel */}
+      <ApprovalPanel order={order} productionOrders={productionOrders} orderId={id} />
+
       {/* Production Orders */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Ordens de Produção</h2>
