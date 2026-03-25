@@ -21,7 +21,10 @@ export default function OrderDetail() {
 
   const { data: order } = useQuery({
     queryKey: ["order", id],
-    queryFn: async () => { const list = await base44.entities.Order.filter({ id }); return list[0]; },
+    queryFn: async () => {
+      const list = await base44.entities.Order.list("-created_date", 500);
+      return list.find(o => o.id === id);
+    },
   });
 
   const { data: productionOrders = [] } = useQuery({
