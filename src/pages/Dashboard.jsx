@@ -52,14 +52,14 @@ export default function Dashboard() {
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectorChart productionOrders={productionOrders} />
-        <SectorTodoChart productionOrders={productionOrders} />
+        <SectorChart productionOrders={productionOrders} orders={orders} />
+        <SectorTodoChart productionOrders={productionOrders} orders={orders} />
       </div>
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <DeadlineChart productionOrders={productionOrders} />
-        <DailyCompletionChart productionOrders={productionOrders} />
+        <DeadlineChart productionOrders={productionOrders} orders={orders} />
+        <DailyCompletionChart productionOrders={productionOrders} orders={orders} />
       </div>
 
       {/* Bottom Row */}
