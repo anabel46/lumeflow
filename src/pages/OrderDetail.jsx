@@ -162,34 +162,66 @@ export default function OrderDetail() {
             Nenhuma ordem de produção. Adicione produtos ao pedido.
           </div>
         ) : (
-          productionOrders.map((po) => (
-            <div key={po.id} className="bg-card rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{po.unique_number}</span>
-                  <span className="font-semibold">{po.product_name}</span>
-                  {po.color && <Badge variant="outline" className="text-xs">{po.color}</Badge>}
+          (() => {
+            const mainOrders = productionOrders.filter(po => !po.is_intermediate);
+            const intermediates = productionOrders.filter(po => po.is_intermediate);
+            return [...mainOrders, ...intermediates.filter(po => !mainOrders.some(m => m.id === po.parent_order_id))].map(po => {
+              const children = intermediates.filter(c => c.parent_order_id === po.id);
+              return (
+                <div key={po.id} className={cn("bg-card rounded-2xl border p-4", po.is_intermediate && "border-purple-200 bg-purple-50/20 ml-6")}>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {po.is_intermediate && <Package className="w-3.5 h-3.5 text-purple-500" />}
+                        <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{po.unique_number}</span>
+                        <span className="font-semibold">{po.product_name}</span>
+                        {po.color && <Badge variant="outline" className="text-xs">{po.color}</Badge>}
+                        {po.is_intermediate && <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">Intermediário</Badge>}
+                      </div>
+                      <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <span>Ref: {po.reference}</span>
+                        <span>Qtd: {po.quantity}</span>
+                        {po.current_sector && (
+                          <span className="flex items-center gap-1">
+                            <ChevronRight className="w-3 h-3" /> {SECTOR_LABELS[po.current_sector]}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {po.technical_drawing_url && (
+                        <a href={po.technical_drawing_url} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm" className="gap-1">
+                            <FileText className="w-3 h-3" /> PDF
+                          </Button>
+                        </a>
+                      )}
+                      <Badge variant="outline" className={cn("text-xs", STATUS_COLORS[po.status])}>
+                        {STATUS_LABELS[po.status]}
+                      </Badge>
+                    </div>
+                  </div>
+                  {/* Child intermediates */}
+                  {children.length > 0 && (
+                    <div className="mt-3 pt-3 border-t space-y-2">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Intermediários</p>
+                      {children.map(child => (
+                        <div key={child.id} className="flex items-center gap-2 text-xs bg-purple-50 rounded-lg px-3 py-2">
+                          <Package className="w-3 h-3 text-purple-500 shrink-0" />
+                          <span className="font-mono text-muted-foreground">{child.unique_number}</span>
+                          <span className="font-medium flex-1">{child.product_name}</span>
+                          <span className="text-muted-foreground">×{child.quantity}</span>
+                          <Badge variant="outline" className={cn("text-[10px]", STATUS_COLORS[child.status])}>
+                            {STATUS_LABELS[child.status]}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-                  <span>Ref: {po.reference}</span>
-                  <span>Qtd: {po.quantity}</span>
-                  {po.current_sector && <span>Setor: {SECTOR_LABELS[po.current_sector]}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {po.technical_drawing_url && (
-                  <a href={po.technical_drawing_url} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm" className="gap-1">
-                      <FileText className="w-3 h-3" /> PDF
-                    </Button>
-                  </a>
-                )}
-                <Badge variant="outline" className={cn("text-xs", STATUS_COLORS[po.status])}>
-                  {STATUS_LABELS[po.status]}
-                </Badge>
-              </div>
-            </div>
-          ))
+              );
+            });
+          })()
         )}
       </div>
 
