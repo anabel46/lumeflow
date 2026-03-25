@@ -41,7 +41,9 @@ export default function OrderDetail() {
     mutationFn: async (data) => {
       const product = products.find(p => p.id === data.product_id);
       const unique = `OP-${Date.now().toString(36).toUpperCase()}`;
-      return base44.entities.ProductionOrder.create({
+
+      // Create main production order
+      const mainPO = await base44.entities.ProductionOrder.create({
         unique_number: unique,
         order_id: id,
         order_number: order?.order_number,
@@ -60,9 +62,43 @@ export default function OrderDetail() {
         production_sequence: product?.production_sequence || [],
         current_sector: product?.production_sequence?.[0] || "",
         current_step_index: 0,
+        sector_status: "aguardando",
         status: "planejamento",
         delivery_deadline: order?.delivery_deadline,
+        is_intermediate: false,
       });
+
+      // Auto-create intermediate component orders
+      const components = product?.components || [];
+      for (const comp of components) {
+        const compProduct = products.find(p => p.id === comp.product_id);
+        const compQty = Math.ceil((comp.quantity_per_unit || 1) * data.quantity);
+        const compUnique = `OP-${Date.now().toString(36).toUpperCase()}-INT`;
+        await base44.entities.ProductionOrder.create({
+          unique_number: compUnique,
+          order_id: id,
+          order_number: order?.order_number,
+          product_id: comp.product_id,
+          reference: comp.reference || compProduct?.reference || "",
+          product_name: comp.name || compProduct?.name || "",
+          quantity: compQty,
+          cost_center: order?.cost_center,
+          request_date: order?.request_date,
+          environment: order?.environment,
+          observations: `Intermediário para ${unique} - ${product?.name}`,
+          technical_drawing_url: compProduct?.technical_drawing_url,
+          production_sequence: compProduct?.production_sequence || [],
+          current_sector: compProduct?.production_sequence?.[0] || "",
+          current_step_index: 0,
+          sector_status: "aguardando",
+          status: "planejamento",
+          delivery_deadline: order?.delivery_deadline,
+          is_intermediate: true,
+          parent_order_id: mainPO.id,
+        });
+      }
+
+      return mainPO;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["production-orders-by-order", id] });
