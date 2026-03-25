@@ -116,22 +116,28 @@ export default function Production() {
 
                 {/* Production Sequence Progress */}
                 <div className="flex items-center gap-1 flex-wrap">
-                  {po.production_sequence?.map((sector, i) => (
-                    <React.Fragment key={i}>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[10px] whitespace-nowrap",
-                          i < po.current_step_index ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-                          i === po.current_step_index && po.status === "em_producao" ? "bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-300" :
-                          "bg-muted text-muted-foreground"
-                        )}
-                      >
-                        {SECTOR_LABELS[sector]?.substring(0, 8) || sector}
-                      </Badge>
-                      {i < po.production_sequence.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground/50" />}
-                    </React.Fragment>
-                  ))}
+                  {po.production_sequence?.map((sector, i) => {
+                    const isDone = i < (po.current_step_index ?? 0);
+                    const isCurrent = i === (po.current_step_index ?? 0) && po.status === "em_producao";
+                    const isInProgress = isCurrent && po.sector_status === "em_producao";
+                    return (
+                      <React.Fragment key={i}>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] whitespace-nowrap",
+                            isDone ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                            isInProgress ? "bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-300" :
+                            isCurrent ? "bg-amber-100 text-amber-700 border-amber-200 ring-1 ring-amber-300" :
+                            "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {SECTOR_LABELS[sector]?.substring(0, 8) || sector}
+                        </Badge>
+                        {i < po.production_sequence.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground/50" />}
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
 
                 <div className="flex items-center gap-2">
