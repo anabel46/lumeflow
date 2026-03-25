@@ -438,6 +438,12 @@ export default function SectorView() {
   };
 
   const handleStartClick = async (po) => {
+    // Block start if parent order is still pending approval
+    const parentOrder = allOrders.find(o => o.id === po.order_id);
+    if (parentOrder?.status === "aprovacao_pendente") {
+      alert(`O pedido #${po.order_number} ainda está aguardando aprovação do gerente. Não é possível iniciar a produção.`);
+      return;
+    }
     if ((po.current_step_index || 0) > 0 || stockItems.length === 0) {
       startMutation.mutate(po);
       return;
