@@ -165,6 +165,76 @@ export default function SectorView() {
     refetchInterval: 30000,
   });
 
+  // Check stock and show alert before starting
+  const handleStartClick = async (po) => {
+    // Only deduce stock on the first sector (step 0)
+    if ((po.current_step_index || 0) > 0 || stockItems.length === 0) {
+      startMutation.mutate(po);
+      return;
+    }
+
+    // Try to find bill-of-materials from product components
+    const product = await base44.entities.Product.filter({ id: po.product_id }).then(r => r?.[0]).catch(() => null);
+    const components = product?.components || [];
+
+    if (components.length === 0) {
+      startMutation.mutate(po);
+      return;
+    }
+
+    const deductions = components.map(comp => {
+      const stockItem = stockItems.find(s => s.code === comp.reference || s.name?.toLowerCase() === comp.name?.toLowerCase());
+      const needed = (comp.quantity_per_unit || 1) * (po.quantity || 1);
+      const currentStock = stockItem ? (stockItem.quantity_factory || 0) : 0;
+      const afterStock = currentStock - needed;
+      return {
+        name: comp.name,
+        code: comp.reference || "-",
+        unit: stockItem?.unit || "un",
+        needed,
+        currentStock,
+        stockItemId: stockItem?.id || null,
+        insufficient: currentStock < needed,
+        willBeLow: stockItem && afterStock < (stockItem.minimum_stock || 0) && afterStock >= 0,
+      };
+    }).filter(d => d.stockItemId); // only show items that exist in stock
+
+    if (deductions.length === 0) {
+      startMutation.mutate(po);
+      return;
+    }
+
+    setStartingPO(po);
+    setStockAlert({ po, deductions });
+  };
+
+  const confirmStart = async () => {
+    if (!startingPO || !stockAlert) return;
+    // Deduct stock items
+    for (const d of stockAlert.deductions) {
+      if (!d.stockItemId) continue;
+      const item = stockItems.find(s => s.id === d.stockItemId);
+      if (!item) continue;
+      const newQty = Math.max(0, (item.quantity_factory || 0) - d.needed);
+      await base44.entities.StockItem.update(d.stockItemId, { quantity_factory: newQty });
+      await base44.entities.StockMovement.create({
+        stock_item_id: d.stockItemId,
+        item_name: d.name,
+        item_code: d.code,
+        movement_type: "saida",
+        quantity: d.needed,
+        from_stock: "fabril",
+        reason: `Produção iniciada — OP ${startingPO.unique_number}`,
+        production_order_id: startingPO.id,
+        unique_number: startingPO.unique_number,
+      });
+    }
+    queryClient.invalidateQueries({ queryKey: ["stock-items"] });
+    setStockAlert(null);
+    startMutation.mutate(startingPO);
+    setStartingPO(null);
+  };
+
   const startMutation = useMutation({
     mutationFn: async (po) => {
       await base44.entities.SectorLog.create({
