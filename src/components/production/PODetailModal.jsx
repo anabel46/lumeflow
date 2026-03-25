@@ -1,8 +1,10 @@
 import React from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Package, MapPin, Store, Hash, Layers, Palette, MessageSquare, User, Calendar } from "lucide-react";
+import { FileText, MapPin, Store, Hash, Layers, Palette, MessageSquare, Calendar, AlignLeft } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { SECTOR_LABELS, STATUS_LABELS, STATUS_COLORS } from "@/lib/constants";
