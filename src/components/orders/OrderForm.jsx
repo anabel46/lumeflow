@@ -22,7 +22,7 @@ export default function OrderForm({ open, onClose, onSubmit, initialData }) {
     delivery_type: "normal",
     cost_center: "",
     environment: "",
-    status: "aguardando",
+    status: "aprovacao_pendente",
     observations: "",
   });
 
@@ -116,6 +116,8 @@ export default function OrderForm({ open, onClose, onSubmit, initialData }) {
             <Select value={form.status} onValueChange={(v) => update("status", v)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="aprovacao_pendente">Aprovação Pendente</SelectItem>
+                <SelectItem value="confirmado">Confirmado</SelectItem>
                 <SelectItem value="aguardando">Aguardando</SelectItem>
                 <SelectItem value="em_producao">Em Produção</SelectItem>
                 <SelectItem value="finalizado">Finalizado</SelectItem>
