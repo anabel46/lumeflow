@@ -35,7 +35,7 @@ function StarRating({ value, onChange }) {
   );
 }
 
-function OrderCard({ po, sectorId, onStart, onComplete }) {
+function OrderCard({ po, sectorId, onStart, onComplete, onDetail }) {
   const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < new Date();
   const sectorStatus = po.sector_status || "aguardando";
 
@@ -46,25 +46,49 @@ function OrderCard({ po, sectorId, onStart, onComplete }) {
     )}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
+          {/* Header row */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
             {po.is_intermediate && <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">Intermediário</Badge>}
             {isOverdue && sectorStatus !== "concluido" && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
           </div>
-          <p className="font-semibold mt-1.5 text-sm">{po.product_name}</p>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-2 text-xs text-muted-foreground">
-            <span>Pedido: <strong className="text-foreground">{po.order_number}</strong></span>
-            <span>Ref: <strong className="text-foreground">{po.reference || "-"}</strong></span>
-            <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
-            <span>Cor: <strong className="text-foreground">{po.color || "-"}</strong></span>
-            {po.delivery_deadline && (
-              <span className="col-span-2">
-                Prazo: <strong className={cn(isOverdue ? "text-red-500" : "text-foreground")}>
-                  {format(new Date(po.delivery_deadline), "dd/MM/yy")}
-                </strong>
-              </span>
+
+          {/* Product name */}
+          <p className="font-semibold mt-1.5 text-sm leading-tight">{po.product_name}</p>
+          {po.reference && <p className="text-[11px] text-muted-foreground font-mono">{po.reference}</p>}
+
+          {/* Key info grid */}
+          <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>Pedido: <strong className="text-foreground">{po.order_number}</strong></span>
+              <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
+              {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
+            </div>
+            {po.complement && (
+              <p>Complemento: <strong className="text-foreground">{po.complement}</strong></p>
             )}
+            {po.control && (
+              <p>Controle: <strong className="text-foreground">{po.control}</strong></p>
+            )}
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5">
+              {po.cost_center && (
+                <span className="flex items-center gap-1">
+                  <Store className="w-3 h-3" />{po.cost_center}
+                </span>
+              )}
+              {po.environment && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />{po.environment}
+                </span>
+              )}
+              {po.delivery_deadline && (
+                <span className={cn(isOverdue ? "text-red-500 font-semibold" : "")}>
+                  Prazo: {format(new Date(po.delivery_deadline), "dd/MM/yy")}
+                </span>
+              )}
+            </div>
           </div>
+
           {po.sector_started_at && sectorStatus === "em_producao" && (
             <div className="flex items-center gap-1 mt-2 text-xs text-blue-600">
               <Clock className="w-3 h-3" />
@@ -72,7 +96,12 @@ function OrderCard({ po, sectorId, onStart, onComplete }) {
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-1.5">
+
+        {/* Actions */}
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="gap-1 text-xs w-full justify-start">
+            <Eye className="w-3 h-3" /> Detalhes
+          </Button>
           {po.technical_drawing_url && (
             <a href={po.technical_drawing_url} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="gap-1 text-xs w-full"><FileText className="w-3 h-3" />PDF</Button>
