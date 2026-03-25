@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ClipboardList, Package, Factory, Warehouse,
-  ShieldCheck, Settings, ChevronLeft, ChevronRight, BookOpen,
+  ShieldCheck, ChevronLeft, ChevronRight, BookOpen,
   Scissors, Flame, Paintbrush, CircleDot, Palette, Sparkles,
-  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X
+  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, HeadphoneOff, Headphones
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTORS } from "@/lib/constants";

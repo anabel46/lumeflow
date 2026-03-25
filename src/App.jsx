@@ -51,6 +51,7 @@ const AuthenticatedApp = () => {
         <Route path="/estoque" element={<Stock />} />
         <Route path="/qualidade" element={<Quality />} />
         <Route path="/setor/:sectorId" element={<SectorView />} />
+        <Route path="/sac" element={<Sac />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
