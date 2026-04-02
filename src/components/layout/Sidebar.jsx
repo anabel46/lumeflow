@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ClipboardList, Package, Factory, Warehouse,
   ShieldCheck, ChevronLeft, ChevronRight, BookOpen,
   Scissors, Flame, Paintbrush, CircleDot, Palette, Sparkles,
-  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, Headphones, FileText, UserCog
+  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, Headphones, FileText, UserCog, ArrowLeftRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTORS } from "@/lib/constants";
@@ -24,6 +24,7 @@ const mainNav = [
   { path: "/sac", label: "SAC", icon: Headphones },
   { path: "/relatorios", label: "Relatórios", icon: FileText },
   { path: "/administracao", label: "Administração", icon: UserCog },
+  { path: "/integracao-sankhya", label: "Integração Sankhya", icon: ArrowLeftRight },
 ];
 
 export default function Sidebar() {
