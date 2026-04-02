@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import PODetailModal from "@/components/production/PODetailModal";
 import StockDeductionAlert from "@/components/production/StockDeductionAlert";
+import ReturnIssueDialog from "@/components/production/ReturnIssueDialog";
 import { format, formatDistanceStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -392,6 +393,8 @@ export default function SectorView() {
   const [detailPO, setDetailPO] = useState(null);
   const [stockAlert, setStockAlert] = useState(null);
   const [startingPO, setStartingPO] = useState(null);
+  const [returnIssueDialog, setReturnIssueDialog] = useState(null);
+  const [returnData, setReturnData] = useState(null);
   const queryClient = useQueryClient();
 
   const isIndividual = INDIVIDUAL_SECTORS.includes(sectorId);
@@ -443,7 +446,14 @@ export default function SectorView() {
       alert(`O pedido #${po.order_number} ainda está aguardando aprovação do gerente. Não é possível iniciar a produção.`);
       return;
     }
-    if ((po.current_step_index || 0) > 0 || stockItems.length === 0) {
+
+    // Show return issue dialog for sectors after the first
+    if ((po.current_step_index || 0) > 0) {
+      setReturnIssueDialog(po);
+      return;
+    }
+
+    if (stockItems.length === 0) {
       startMutation.mutate(po);
       return;
     }
@@ -509,14 +519,25 @@ export default function SectorView() {
         started_at: new Date().toISOString(),
         timestamp: new Date().toISOString(),
       });
-      return base44.entities.ProductionOrder.update(po.id, {
+      const updateData = {
         sector_status: "em_producao",
         sector_started_at: new Date().toISOString(),
         status: "em_producao",
         started_at: po.started_at || new Date().toISOString(),
-      });
+      };
+      if (returnData) {
+        updateData.return_from_sector = {
+          ...returnData,
+          from_sector: po.current_sector === "" || po.current_step_index === 0 ? null : SECTOR_LABELS[po.production_sequence?.[po.current_step_index - 1]],
+        };
+      }
+      return base44.entities.ProductionOrder.update(po.id, updateData);
     },
-    onSuccess: invalidateAll,
+    onSuccess: () => {
+      setReturnData(null);
+      setReturnIssueDialog(null);
+      invalidateAll();
+    },
   });
 
   const completeMutation = useMutation({
@@ -741,6 +762,35 @@ export default function SectorView() {
         onClose={() => { setStockAlert(null); setStartingPO(null); }}
         onConfirm={confirmStart}
         deductions={stockAlert?.deductions}
+        loading={startMutation.isPending}
+      />
+
+      <ReturnIssueDialog
+        open={!!returnIssueDialog}
+        po={returnIssueDialog}
+        onClose={() => {
+          setReturnIssueDialog(null);
+          setReturnData(null);
+        }}
+        onContinue={(data) => {
+          setReturnData(data);
+          if (returnIssueDialog && ((returnIssueDialog.current_step_index || 0) === 0 || stockItems.length === 0)) {
+            startMutation.mutate(returnIssueDialog);
+          } else if (returnIssueDialog) {
+            setStartingPO(returnIssueDialog);
+            const product = returnIssueDialog.product_id;
+            if (product && stockItems.length > 0) {
+              const components = []; // Stock check would go here if needed
+              if (components.length === 0) {
+                startMutation.mutate(returnIssueDialog);
+              } else {
+                setStockAlert({ po: returnIssueDialog, deductions: components });
+              }
+            } else {
+              startMutation.mutate(returnIssueDialog);
+            }
+          }
+        }}
         loading={startMutation.isPending}
       />
 
