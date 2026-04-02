@@ -74,7 +74,7 @@ export default function Orders() {
                 <tr><td colSpan={6} className="text-center p-8 text-muted-foreground">Nenhum pedido encontrado</td></tr>
               ) : (
                 filtered.map((order) => (
-                  <tr key={order.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <tr key={order.id} className="border-b hover:bg-muted/60 transition-colors">
                     <td className="p-4 font-semibold">{order.order_number}</td>
                     <td className="p-4">{order.client_name}</td>
                     <td className="p-4">{order.request_date ? format(new Date(order.request_date), "dd/MM/yyyy") : "-"}</td>
