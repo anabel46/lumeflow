@@ -25,6 +25,9 @@ import { useNotifications } from "@/lib/NotificationContext";
 // Setores que usam visualização individual (por OP), não por pedido
 const INDIVIDUAL_SECTORS = ["estamparia", "tornearia"];
 
+// Setores de montagem que agrupam por ambiente
+const ASSEMBLY_SECTORS = ["montagem_decorativa", "montagem_eletrica", "montagem_perfil", "montagem_embutidos"];
+
 const SECTOR_STATUS_COLORS = {
   aguardando: "border-l-amber-400",
   em_producao: "border-l-blue-500",
@@ -400,6 +403,7 @@ export default function SectorView() {
   const { notify } = useNotifications();
 
   const isIndividual = INDIVIDUAL_SECTORS.includes(sectorId);
+  const isAssembly = ASSEMBLY_SECTORS.includes(sectorId);
   const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
 
   const { data: stockItems = [] } = useQuery({
@@ -600,6 +604,17 @@ export default function SectorView() {
   const doneAll = [...doneHere, ...passed.filter(p => !doneHere.some(d => d.id === p.id))];
   const returns = filterOrders(productionOrders.filter(po => po.return_from_sector?.has_issues));
 
+  // Group by environment for assembly sectors
+  const groupByEnvironment = (pos) => {
+    const map = {};
+    pos.forEach(po => {
+      const env = po.environment || "Sem ambiente";
+      if (!map[env]) map[env] = [];
+      map[env].push(po);
+    });
+    return Object.entries(map).map(([env, items]) => ({ env, pos: items }));
+  };
+
   // Group by order for non-individual sectors
   const groupByOrder = (pos) => {
     const map = {};
@@ -684,6 +699,157 @@ export default function SectorView() {
 
       {isLoading ? (
         <div className="text-center p-8 text-muted-foreground">Carregando...</div>
+      ) : isAssembly ? (
+        /* ── VISUALIZAÇÃO POR AMBIENTE (montagens) ── */
+        <div className="space-y-6">
+          {/* Retornos */}
+          {returns.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                <span className="font-semibold text-sm">Retornos</span>
+                <Badge variant="secondary" className="text-xs ml-auto">{returns.length}</Badge>
+              </div>
+              <div className="grid gap-3">
+                {returns.map(po => (
+                  <div key={po.id} className="bg-card rounded-xl border border-red-200 p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+                      <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 py-0.5">⚠ Retorno</Badge>
+                    </div>
+                    <p className="font-semibold text-sm">{po.product_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Ped. #{po.order_number} · {po.environment || "Sem ambiente"}</p>
+                    {po.return_from_sector?.issue_quantity > 0 && (
+                      <p className="text-xs text-red-600 font-medium mt-1">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong>/{po.quantity}</p>
+                    )}
+                    <Button size="sm" className="mt-2.5 w-full gap-1 bg-red-600 hover:bg-red-700 text-xs" onClick={() => handleStartClick(po)}>
+                      <AlertTriangle className="w-3 h-3" /> Corrigir
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Agrupado por Ambiente */}
+          <div className="space-y-6">
+            {groupByEnvironment([...waiting, ...inProgress]).map((group) => (
+              <div key={group.env}>
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <span className="font-semibold text-sm">{group.env}</span>
+                  <Badge variant="secondary" className="text-xs ml-auto">{group.pos.length} OP(s)</Badge>
+                </div>
+                <div className="space-y-2.5">
+                  {group.pos.map(po => {
+                    const waitingPos = waiting.find(w => w.id === po.id);
+                    const inProgPos = inProgress.find(ip => ip.id === po.id);
+                    const isWaiting = !!waitingPos;
+                    const isInProg = !!inProgPos;
+
+                    return (
+                      <div
+                        key={po.id}
+                        className={cn(
+                          "rounded-lg border p-3 transition-all",
+                          isInProg ? "bg-blue-50/50 border-blue-100" : "bg-muted/30 border-border/40"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <span className="font-mono text-xs font-bold text-primary">{po.unique_number}</span>
+                            <p className="font-semibold text-sm mt-0.5">{po.product_name}</p>
+                            {po.reference && <p className="text-[10px] text-muted-foreground font-mono">{po.reference}</p>}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="sm" onClick={() => setDetailPO(po)} className="h-6 w-6 p-0">
+                              <Eye className="w-3 h-3" />
+                            </Button>
+                            {isWaiting && (
+                              <Button size="sm" variant="outline" onClick={() => handleStartClick(po)} className="h-6 px-2 text-[11px] gap-0.5">
+                                <Play className="w-3 h-3" />
+                              </Button>
+                            )}
+                            {isInProg && (
+                              <Button size="sm" onClick={() => setCompleting(po)} className="h-6 px-2 text-[11px] gap-0.5 bg-emerald-600 hover:bg-emerald-700">
+                                <CheckCircle2 className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
+                          <span>Pedido: <strong className="text-foreground">#{po.order_number}</strong></span>
+                          <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
+                          {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
+                          {po.cost_center && <span className="flex items-center gap-0.5"><Store className="w-3 h-3" />{po.cost_center}</span>}
+                        </div>
+
+                        {/* Sequência */}
+                        {po.production_sequence?.length > 0 && (
+                          <div className="flex items-center gap-0.5 mt-2 overflow-x-auto pb-0.5 no-scrollbar">
+                            {po.production_sequence.map((s, i) => {
+                              const isDone = i < (po.current_step_index ?? 0);
+                              const isCurrent = s === po.current_sector;
+                              return (
+                                <React.Fragment key={i}>
+                                  <span className={cn(
+                                    "text-[9px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap",
+                                    isDone ? "bg-emerald-100 text-emerald-700" :
+                                    isCurrent ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" :
+                                    "bg-muted text-muted-foreground/60"
+                                  )}>
+                                    {SECTOR_LABELS[s]?.substring(0, 8) || s}
+                                  </span>
+                                  {i < po.production_sequence.length - 1 && (
+                                    <ChevronRight className="w-2 h-2 text-muted-foreground/30 shrink-0" />
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {po.sector_started_at && isInProg && (
+                          <div className="flex items-center gap-1 mt-2 text-xs text-blue-600 font-medium">
+                            <Clock className="w-3 h-3" />
+                            {format(new Date(po.sector_started_at), "HH:mm")} · {formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Concluídos */}
+          {doneAll.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="font-semibold text-sm">Concluídos</span>
+                <Badge variant="secondary" className="text-xs ml-auto">{doneAll.length}</Badge>
+              </div>
+              <div className="space-y-2">
+                {doneAll.map(po => (
+                  <div key={po.id} className="bg-muted/30 rounded-lg border border-dashed p-2.5 opacity-60">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-mono text-[10px] text-muted-foreground">{po.unique_number}</span>
+                        <p className="text-xs font-medium">{po.product_name}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setDetailPO(po)} className="h-5 px-1 text-[10px]">
+                        <Eye className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       ) : isIndividual ? (
         /* ── VISUALIZAÇÃO INDIVIDUAL (estamparia / tornearia) ── */
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
