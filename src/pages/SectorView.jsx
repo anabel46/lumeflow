@@ -598,6 +598,7 @@ export default function SectorView() {
   const doneHere = filterOrders(productionOrders.filter(po => po.sector_status === "concluido"));
   const passed = filterOrders(allRelevantOrders);
   const doneAll = [...doneHere, ...passed.filter(p => !doneHere.some(d => d.id === p.id))];
+  const returns = filterOrders(productionOrders.filter(po => po.return_from_sector?.has_issues));
 
   // Group by order for non-individual sectors
   const groupByOrder = (pos) => {
@@ -685,11 +686,39 @@ export default function SectorView() {
         <div className="text-center p-8 text-muted-foreground">Carregando...</div>
       ) : isIndividual ? (
         /* ── VISUALIZAÇÃO INDIVIDUAL (estamparia / tornearia) ── */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <KanbanColumn title="Aguardando" colorClass="bg-amber-400" count={waiting.length}>
-            {waiting.length === 0
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+          <KanbanColumn title="Retornos" colorClass="bg-red-500" count={returns.length}>
+            {returns.length === 0
+              ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum retorno</div>
+              : returns.map(po => (
+                  <div key={po.id} className="bg-card rounded-xl border-l-4 border-l-red-500 border p-3 hover:shadow-md transition-all">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+                      <Badge variant="outline" className="text-[10px] border-red-300 text-red-600 py-0.5 gap-0.5">
+                        <AlertTriangle className="w-2.5 h-2.5" />Retorno
+                      </Badge>
+                    </div>
+                    <p className="font-semibold text-sm">{po.product_name}</p>
+                    <div className="mt-1.5 text-xs space-y-0.5 text-muted-foreground">
+                      <p>Qtd original: <strong>{po.quantity}</strong></p>
+                      {po.return_from_sector?.issue_quantity > 0 && (
+                        <p className="text-red-600 font-medium">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong></p>
+                      )}
+                      {po.return_from_sector?.issue_observations && (
+                        <p className="text-xs italic mt-1 line-clamp-2">{po.return_from_sector.issue_observations}</p>
+                      )}
+                    </div>
+                    <Button size="sm" className="mt-3 w-full gap-1 bg-red-600 hover:bg-red-700" onClick={() => handleStartClick(po)}>
+                      <AlertTriangle className="w-3.5 h-3.5" /> Corrigir
+                    </Button>
+                  </div>
+                ))
+            }
+          </KanbanColumn>
+          <KanbanColumn title="Aguardando" colorClass="bg-amber-400" count={waiting.filter(p => !p.return_from_sector?.has_issues).length}>
+            {waiting.filter(p => !p.return_from_sector?.has_issues).length === 0
               ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma aguardando</div>
-              : waiting.map(po => <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />)
+              : waiting.filter(p => !p.return_from_sector?.has_issues).map(po => <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />)
             }
           </KanbanColumn>
           <KanbanColumn title="Em Produção" colorClass="bg-blue-500" count={inProgress.length}>
@@ -707,18 +736,51 @@ export default function SectorView() {
         </div>
       ) : (
         /* ── VISUALIZAÇÃO POR PEDIDO (demais setores) ── */
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Coluna esquerda: pedidos ativos */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Coluna esquerda: retornos */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-red-500" />
+              <span className="font-semibold text-sm">Retornos</span>
+              <Badge variant="secondary" className="text-xs ml-auto">{returns.length}</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {returns.length === 0
+                ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum retorno</div>
+                : returns.map(po => (
+                    <div key={po.id} className="bg-card rounded-xl border border-red-200 p-3 hover:shadow-md transition-all">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+                        <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 py-0.5">⚠ Retorno</Badge>
+                      </div>
+                      <p className="font-semibold text-sm">{po.product_name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Ped. #{po.order_number}</p>
+                      {po.return_from_sector?.issue_quantity > 0 && (
+                        <p className="text-xs text-red-600 font-medium mt-1">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong>/{po.quantity}</p>
+                      )}
+                      {po.return_from_sector?.issue_observations && (
+                        <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">{po.return_from_sector.issue_observations}</p>
+                      )}
+                      <Button size="sm" className="mt-2.5 w-full gap-1 bg-red-600 hover:bg-red-700 text-xs" onClick={() => handleStartClick(po)}>
+                        <AlertTriangle className="w-3 h-3" /> Corrigir
+                      </Button>
+                    </div>
+                  ))
+              }
+            </div>
+          </div>
+
+          {/* Coluna meio: pedidos ativos */}
           <div>
             <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
               <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-blue-500" />
               <span className="font-semibold text-sm">Pedidos Ativos</span>
-              <Badge variant="secondary" className="text-xs ml-auto">{activeGroups.length}</Badge>
+              <Badge variant="secondary" className="text-xs ml-auto">{activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).length}</Badge>
             </div>
             <div className="space-y-3">
-              {activeGroups.length === 0
+              {activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).length === 0
                 ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum pedido ativo</div>
-                : activeGroups.map(g => (
+                : activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).map(g => (
                     <OrderGroupCard
                       key={g.orderId || g.orderNumber}
                       {...g}
