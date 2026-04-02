@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, ClipboardCheck, CheckCircle2, XCircle, RefreshCw, AlertTriangle } from "lucide-react";
+import { Search, ClipboardCheck, CheckCircle2, XCircle, RefreshCw, AlertTriangle, BarChart3, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { SECTORS, SECTOR_LABELS } from "@/lib/constants";
@@ -133,11 +133,63 @@ export default function Quality() {
 
   const needsCorrectionSector = form.overall_result === "reprovado" || form.overall_result === "retrabalho";
 
+  // Dashboard statistics
+  const totalChecks = checks.length;
+  const aprovados = checks.filter(c => c.overall_result === "aprovado").length;
+  const reprovados = checks.filter(c => c.overall_result === "reprovado").length;
+  const retrabalhos = checks.filter(c => c.overall_result === "retrabalho").length;
+  const approvalRate = totalChecks > 0 ? Math.round((aprovados / totalChecks) * 100) : 0;
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Controle de Qualidade</h1>
-        <p className="text-sm text-muted-foreground">Verificação e aprovação de produtos</p>
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
+          <ClipboardCheck className="w-5 h-5 text-primary-foreground" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">Controle de Qualidade</h1>
+          <p className="text-sm text-muted-foreground">Verificação e aprovação de produtos</p>
+        </div>
+      </div>
+
+      {/* Dashboard */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Total de Inspeções</p>
+              <p className="text-2xl font-bold">{totalChecks}</p>
+            </div>
+            <BarChart3 className="w-8 h-8 text-primary/20" />
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Aprovados</p>
+              <p className="text-2xl font-bold text-emerald-600">{aprovados}</p>
+            </div>
+            <CheckCircle2 className="w-8 h-8 text-emerald-500/20" />
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Retrabalhos</p>
+              <p className="text-2xl font-bold text-amber-600">{retrabalhos}</p>
+            </div>
+            <RefreshCw className="w-8 h-8 text-amber-500/20" />
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Taxa de Aprovação</p>
+              <p className="text-2xl font-bold text-blue-600">{approvalRate}%</p>
+            </div>
+            <TrendingUp className="w-8 h-8 text-blue-500/20" />
+          </div>
+        </div>
       </div>
 
       {/* Pending QC */}
