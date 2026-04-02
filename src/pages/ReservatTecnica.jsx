@@ -4,20 +4,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Eye, Trash2, Edit2 } from "lucide-react";
+import { Plus, Search, Briefcase, DollarSign, AlertCircle, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import RTKanban from "@/components/rt/RTKanban";
 import RTPedidoForm from "@/components/rt/RTPedidoForm";
 import RTTabela from "@/components/rt/RTTabela";
-
-const STATUS_LABELS = {
-  pendente: "Pendente",
-  em_processo: "Em Processo",
-  aguardando_nf: "Aguardando NF",
-  lancado_movimentacao: "Lançado na Movimentação",
-  pagamento_realizado: "Pagamento Realizado",
-};
 
 export default function ReservatTecnica() {
   const [view, setView] = useState("kanban");
@@ -73,17 +65,19 @@ export default function ReservatTecnica() {
   };
 
   return (
-    <div className="space-y-6 min-h-screen" style={{ backgroundColor: "#1a1a2e" }}>
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Reserva Técnica</h1>
-          <p className="text-sm text-gray-400">Gestão de comissões de arquitetos</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
+            <Briefcase className="w-5 h-5 text-primary-foreground" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Reserva Técnica</h1>
+            <p className="text-sm text-muted-foreground">Gestão de comissões de arquitetos</p>
+          </div>
         </div>
-        <Button
-          onClick={() => setShowForm(true)}
-          className="gap-2 bg-blue-600 hover:bg-blue-700"
-        >
+        <Button onClick={() => setShowForm(true)} className="gap-2">
           <Plus className="w-4 h-4" />
           Novo Pedido RT
         </Button>
@@ -91,37 +85,55 @@ export default function ReservatTecnica() {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl p-4 border border-gray-700 bg-gray-900/50 backdrop-blur">
-          <p className="text-xs text-gray-400 mb-2">Total de RTs do Mês</p>
-          <p className="text-2xl font-bold text-white">{kpis.totalRTs}</p>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Total de RTs do Mês</p>
+              <p className="text-2xl font-bold">{kpis.totalRTs}</p>
+            </div>
+            <Briefcase className="w-8 h-8 text-primary/20" />
+          </div>
         </div>
-        <div className="rounded-xl p-4 border border-gray-700 bg-gray-900/50 backdrop-blur">
-          <p className="text-xs text-gray-400 mb-2">Valor Total a Pagar</p>
-          <p className="text-2xl font-bold text-white">R$ {kpis.valorTotal.toFixed(2).replace(".", ",")}</p>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Valor Total a Pagar</p>
+              <p className="text-2xl font-bold">R$ {kpis.valorTotal.toFixed(2).replace(".", ",")}</p>
+            </div>
+            <DollarSign className="w-8 h-8 text-success/20" />
+          </div>
         </div>
-        <div className="rounded-xl p-4 border border-gray-700 bg-gray-900/50 backdrop-blur">
-          <p className="text-xs text-gray-400 mb-2">Aguardando NF</p>
-          <p className="text-2xl font-bold text-yellow-400">{kpis.aguardandoNF}</p>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Aguardando NF</p>
+              <p className="text-2xl font-bold text-warning">{kpis.aguardandoNF}</p>
+            </div>
+            <AlertCircle className="w-8 h-8 text-warning/20" />
+          </div>
         </div>
-        <div className="rounded-xl p-4 border border-gray-700 bg-gray-900/50 backdrop-blur">
-          <p className="text-xs text-gray-400 mb-2">Pagas no Mês</p>
-          <p className="text-2xl font-bold text-emerald-400">{kpis.pagas}</p>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Pagas no Mês</p>
+              <p className="text-2xl font-bold text-success">{kpis.pagas}</p>
+            </div>
+            <CheckCircle2 className="w-8 h-8 text-success/20" />
+          </div>
         </div>
       </div>
 
       {/* View Switcher */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button
           variant={view === "kanban" ? "default" : "outline"}
           onClick={() => setView("kanban")}
-          className={view === "kanban" ? "bg-blue-600 hover:bg-blue-700" : ""}
         >
           Kanban
         </Button>
         <Button
           variant={view === "tabela" ? "default" : "outline"}
           onClick={() => setView("tabela")}
-          className={view === "tabela" ? "bg-blue-600 hover:bg-blue-700" : ""}
         >
           Tabela
         </Button>
@@ -129,10 +141,10 @@ export default function ReservatTecnica() {
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Buscar por código ou arquiteto..."
-          className="pl-9 bg-gray-900 border-gray-700 text-white"
+          className="pl-9"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
