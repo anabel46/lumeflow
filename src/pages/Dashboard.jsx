@@ -11,6 +11,10 @@ import DailyCompletionChart from "@/components/dashboard/DailyCompletionChart";
 import MonthlyOrderStats from "@/components/dashboard/MonthlyOrderStats";
 import PeriodSummary from "@/components/dashboard/PeriodSummary";
 import EfficiencyChart from "@/components/dashboard/EfficiencyChart";
+import OEEIndicator from "@/components/dashboard/OEEIndicator";
+import SectorAverageTime from "@/components/dashboard/SectorAverageTime";
+import TeamProductivity from "@/components/dashboard/TeamProductivity";
+import BottleneckAnalysis from "@/components/dashboard/BottleneckAnalysis";
 
 export default function Dashboard() {
   const { data: productionOrders = [] } = useQuery({
@@ -70,6 +74,21 @@ export default function Dashboard() {
 
       {/* Efficiency Row */}
       <EfficiencyChart />
+
+      {/* Analytics Dashboard */}
+      <div className="pt-4 border-t">
+        <h2 className="text-xl font-bold mb-6">Dashboard Analítico</h2>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <OEEIndicator />
+          <BottleneckAnalysis />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SectorAverageTime />
+          <TeamProductivity />
+        </div>
+      </div>
     </div>
   );
 }
