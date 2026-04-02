@@ -12,6 +12,7 @@ import { Search, ClipboardCheck, CheckCircle2, XCircle, RefreshCw, AlertTriangle
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { SECTORS, SECTOR_LABELS } from "@/lib/constants";
+import { useNotifications } from "@/lib/NotificationContext";
 
 const CHECK_ITEMS = [
   { key: "visual_appearance", label: "Aparência Visual" },
@@ -31,6 +32,7 @@ export default function Quality() {
   const [selectedPO, setSelectedPO] = useState(null);
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
 
   const { data: checks = [] } = useQuery({
     queryKey: ["quality-checks"],
@@ -99,6 +101,14 @@ export default function Quality() {
           observations: `Reprovado. Retornando para: ${SECTOR_LABELS[correction_sector]}. ${checkData.observations || ""}`,
           timestamp: new Date().toISOString(),
         });
+        notify(
+          `OP Reprovada — ${selectedPO.product_name}`,
+          "rejection",
+          {
+            unique_number: selectedPO.unique_number,
+            product_name: selectedPO.product_name,
+          }
+        );
       } else if (checkData.overall_result === "retrabalho" && correction_sector) {
         // Retrabalho: send to correction sector
         await base44.entities.ProductionOrder.update(selectedPO.id, {

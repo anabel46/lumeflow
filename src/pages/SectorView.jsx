@@ -20,6 +20,7 @@ import { format, formatDistanceStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { SECTOR_LABELS } from "@/lib/constants";
+import { useNotifications } from "@/lib/NotificationContext";
 
 // Setores que usam visualização individual (por OP), não por pedido
 const INDIVIDUAL_SECTORS = ["estamparia", "tornearia"];
@@ -396,6 +397,7 @@ export default function SectorView() {
   const [returnIssueDialog, setReturnIssueDialog] = useState(null);
   const [returnData, setReturnData] = useState(null);
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
 
   const isIndividual = INDIVIDUAL_SECTORS.includes(sectorId);
   const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
@@ -774,6 +776,17 @@ export default function SectorView() {
         }}
         onContinue={(data) => {
           setReturnData(data);
+          if (data.has_issues) {
+            notify(
+              `Problemas Identificados no Retorno — ${returnIssueDialog.product_name}`,
+              "return_issue",
+              {
+                unique_number: returnIssueDialog.unique_number,
+                product_name: returnIssueDialog.product_name,
+                issue_quantity: data.issue_quantity,
+              }
+            );
+          }
           if (returnIssueDialog && ((returnIssueDialog.current_step_index || 0) === 0 || stockItems.length === 0)) {
             startMutation.mutate(returnIssueDialog);
           } else if (returnIssueDialog) {
