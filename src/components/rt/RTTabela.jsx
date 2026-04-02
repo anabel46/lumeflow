@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import { cn } from "@/lib/utils";
 
 export default function RTTabela({ pedidos, onEdit, search }) {
@@ -11,47 +12,28 @@ export default function RTTabela({ pedidos, onEdit, search }) {
   );
 
   const exportarExcel = () => {
-    const data = filtered.map((p) => [
-      p.codigo_pedido,
-      p.valor_total_pedido?.toFixed(2) || "",
-      p.valor_componentes?.toFixed(2) || "",
-      p.valor_base_rt?.toFixed(2) || "",
-      p.valor_rt?.toFixed(2) || "",
-      p.nome_arquiteto,
-      p.status === "aguardando_nf" ? "Sim" : "Não",
-      "",
-      "",
-      p.observacoes || "",
-      p.data_pagamento || "",
-    ]);
+    const data = filtered.map((p) => ({
+      "Código do Pedido": p.codigo_pedido,
+      "Valor Total": p.valor_total_pedido?.toFixed(2) || "",
+      "Valor Componentes": p.valor_componentes?.toFixed(2) || "",
+      "Valor Base RT": p.valor_base_rt?.toFixed(2) || "",
+      "10% RT": p.valor_rt?.toFixed(2) || "",
+      "Nome do Arquiteto": p.nome_arquiteto,
+      "Emite NF": p.status === "aguardando_nf" ? "Sim" : "Não",
+      "Dados Bancários": "", // Preenchido na NF
+      "Anexo da NF": "",
+      Observações: p.observacoes || "",
+      "Data do Pagamento": p.data_pagamento || "",
+    }));
 
-    const headers = [
-      "Código do Pedido",
-      "Valor Total",
-      "Valor Componentes",
-      "Valor Base RT",
-      "10% RT",
-      "Nome do Arquiteto",
-      "Emite NF",
-      "Dados Bancários",
-      "Anexo da NF",
-      "Observações",
-      "Data do Pagamento",
-    ];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "RTs");
 
-    // Criar CSV
-    const csv = [headers, ...data]
-      .map((row) => row.map((cell) => `"${cell}"`).join(","))
-      .join("\n");
+    // Styling
+    ws["!cols"] = Array(11).fill({ wch: 20 });
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `relatorio_rt_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    XLSX.writeFile(wb, `relatorio_rt_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
