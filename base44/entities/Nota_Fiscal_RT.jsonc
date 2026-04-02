@@ -1,0 +1,84 @@
+{
+  "name": "Nota_Fiscal_RT",
+  "type": "object",
+  "properties": {
+    "numero_nf": {
+      "type": "string",
+      "description": "N\u00famero da nota fiscal"
+    },
+    "data_emissao": {
+      "type": "string",
+      "format": "date",
+      "description": "Data de emiss\u00e3o da NF"
+    },
+    "data_vencimento": {
+      "type": "string",
+      "format": "date",
+      "description": "Data de vencimento da NF"
+    },
+    "valor_total": {
+      "type": "number",
+      "description": "Valor total da NF"
+    },
+    "arquivo_pdf": {
+      "type": "string",
+      "description": "URL do arquivo PDF da NF"
+    },
+    "retencoes": {
+      "type": "object",
+      "description": "Reten\u00e7\u00f5es aplicadas",
+      "properties": {
+        "inss": {
+          "type": "number",
+          "default": 0
+        },
+        "irrf": {
+          "type": "number",
+          "default": 0
+        },
+        "csll": {
+          "type": "number",
+          "default": 0
+        },
+        "cofins": {
+          "type": "number",
+          "default": 0
+        },
+        "pis": {
+          "type": "number",
+          "default": 0
+        },
+        "iss": {
+          "type": "number",
+          "default": 0
+        }
+      }
+    },
+    "comprovante_pagamento": {
+      "type": "string",
+      "description": "URL do comprovante de pagamento"
+    },
+    "pedido_rt_id": {
+      "type": "string",
+      "description": "ID do Pedido_RT associado"
+    },
+    "arquiteto_id": {
+      "type": "string",
+      "description": "ID do Arquiteto"
+    },
+    "cnpj_nf": {
+      "type": "string",
+      "description": "CNPJ presente na NF"
+    },
+    "codigo_servico": {
+      "type": "string",
+      "description": "C\u00f3digo de servi\u00e7o da NF"
+    }
+  },
+  "required": [
+    "numero_nf",
+    "data_emissao",
+    "valor_total",
+    "pedido_rt_id"
+  ]
+}

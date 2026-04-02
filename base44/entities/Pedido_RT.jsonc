@@ -1,0 +1,95 @@
+{
+  "name": "Pedido_RT",
+  "type": "object",
+  "properties": {
+    "codigo_pedido": {
+      "type": "string",
+      "description": "C\u00f3digo do pedido"
+    },
+    "numero_cliente": {
+      "type": "string",
+      "description": "N\u00famero do cliente"
+    },
+    "loja": {
+      "type": "string",
+      "description": "Loja"
+    },
+    "valor_total_pedido": {
+      "type": "number",
+      "description": "Valor total do pedido"
+    },
+    "valor_componentes": {
+      "type": "number",
+      "default": 0,
+      "description": "Valor dos componentes exclu\u00eddos (fitas, drivers, l\u00e2mpadas, kit ponto de led)"
+    },
+    "valor_base_rt": {
+      "type": "number",
+      "description": "Valor base para RT (total - componentes)"
+    },
+    "valor_rt": {
+      "type": "number",
+      "description": "Valor da RT (10% do valor base)"
+    },
+    "mes_referencia": {
+      "type": "string",
+      "description": "M\u00eas de refer\u00eancia (YYYY-MM)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "em_processo",
+        "aguardando_nf",
+        "lancado_movimentacao",
+        "pagamento_realizado"
+      ],
+      "default": "pendente",
+      "description": "Status do pedido RT"
+    },
+    "data_faturamento": {
+      "type": "string",
+      "format": "date",
+      "description": "Data do faturamento"
+    },
+    "data_pagamento": {
+      "type": "string",
+      "format": "date",
+      "description": "Data do pagamento"
+    },
+    "nome_arquiteto": {
+      "type": "string",
+      "description": "Nome do arquiteto"
+    },
+    "arquiteto_id": {
+      "type": "string",
+      "description": "ID do arquiteto (refer\u00eancia)"
+    },
+    "observacoes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es adicionais"
+    },
+    "componentes_excluidos": {
+      "type": "array",
+      "description": "Lista de componentes exclu\u00eddos com valores",
+      "items": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string"
+          },
+          "valor": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "codigo_pedido",
+    "numero_cliente",
+    "valor_total_pedido",
+    "mes_referencia",
+    "nome_arquiteto"
+  ]
+}

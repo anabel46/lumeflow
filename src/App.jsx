@@ -18,6 +18,7 @@ import SectorView from '@/pages/SectorView';
 import Sac from '@/pages/Sac';
 import Reports from '@/pages/Reports';
 import Administration from '@/pages/Administration';
+import ReservatTecnica from '@/pages/ReservatTecnica';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -56,6 +57,7 @@ const AuthenticatedApp = () => {
         <Route path="/sac" element={<Sac />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/administracao" element={<Administration />} />
+        <Route path="/reserva-tecnica" element={<ReservatTecnica />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
