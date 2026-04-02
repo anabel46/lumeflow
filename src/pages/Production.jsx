@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Search, Play, Pause, ChevronRight, AlertTriangle, Clock,
   Package, Store, MapPin, Calendar, ChevronDown, CheckSquare,
-  Square, ExternalLink, X
+  Square, ExternalLink, X, List, Layers
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -273,6 +273,7 @@ export default function Production() {
   const [parceiroFilter, setParceiroFilter] = useState("");
   const [uniqueFilter, setUniqueFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [viewMode, setViewMode] = useState("cards"); // "cards" | "list"
   const queryClient = useQueryClient();
   const now = new Date();
 
@@ -453,23 +454,51 @@ export default function Production() {
         <p className="text-sm text-muted-foreground">Planejamento e controle de ordens de produção</p>
       </div>
 
-      {/* Status tabs */}
-      <div className="flex gap-1 flex-wrap">
-        {STATUS_TABS.map(tab => (
+      {/* Status tabs + view mode toggle */}
+      <div className="flex gap-2 flex-wrap items-center justify-between">
+        <div className="flex gap-1 flex-wrap">
+          {STATUS_TABS.map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => setStatusFilter(tab.value)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all border",
+                statusFilter === tab.value
+                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                  : "bg-card text-muted-foreground border-border hover:bg-muted"
+              )}
+            >
+              {tab.label}
+              <span className="ml-1.5 text-[10px] opacity-70">{counts[tab.value]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1 border border-border rounded-lg p-0.5 bg-card">
           <button
-            key={tab.value}
-            onClick={() => setStatusFilter(tab.value)}
+            onClick={() => setViewMode("cards")}
             className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all border",
-              statusFilter === tab.value
-                ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                : "bg-card text-muted-foreground border-border hover:bg-muted"
+              "px-2 py-1.5 rounded text-xs font-medium transition-all gap-1 flex items-center",
+              viewMode === "cards"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {tab.label}
-            <span className="ml-1.5 text-[10px] opacity-70">{counts[tab.value]}</span>
+            <Layers className="w-3.5 h-3.5" />
+            Cards
           </button>
-        ))}
+          <button
+            onClick={() => setViewMode("list")}
+            className={cn(
+              "px-2 py-1.5 rounded text-xs font-medium transition-all gap-1 flex items-center",
+              viewMode === "list"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <List className="w-3.5 h-3.5" />
+            Lista
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -548,16 +577,17 @@ export default function Production() {
         </div>
       )}
 
-      {/* List grouped by order */}
-      <div className="space-y-3">
-        {isLoading ? (
-          <div className="text-center p-8 text-muted-foreground">Carregando...</div>
-        ) : groups.length === 0 ? (
-          <div className="bg-card rounded-2xl border p-8 text-center text-muted-foreground">
-            Nenhuma ordem encontrada
-          </div>
-        ) : (
-          groups.map(group => (
+      {/* View content */}
+      {isLoading ? (
+        <div className="text-center p-8 text-muted-foreground">Carregando...</div>
+      ) : groups.length === 0 ? (
+        <div className="bg-card rounded-2xl border p-8 text-center text-muted-foreground">
+          Nenhuma ordem encontrada
+        </div>
+      ) : viewMode === "cards" ? (
+        /* Cards view */
+        <div className="space-y-3">
+          {groups.map(group => (
             <OrderGroupCard
               key={group.order.id || group.order.order_number}
               group={group}
@@ -568,9 +598,117 @@ export default function Production() {
               onSelectAll={handleSelectAll}
               now={now}
             />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        /* Spreadsheet view */
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="p-2 text-left font-semibold">
+                  <Checkbox
+                    checked={filteredPOs.length > 0 && filteredPOs.every(po => selectedIds.has(po.id))}
+                    onCheckedChange={() => {
+                      const selectableIds = filteredPOs.filter(p => p.status === "planejamento" || p.status === "em_producao" || p.status === "pausado").map(p => p.id);
+                      handleSelectAll(selectableIds, filteredPOs.every(po => selectedIds.has(po.id)));
+                    }}
+                    className="w-4 h-4"
+                  />
+                </th>
+                <th className="p-3 text-left font-semibold">Nº Único</th>
+                <th className="p-3 text-left font-semibold">Produto</th>
+                <th className="p-3 text-left font-semibold">Pedido</th>
+                <th className="p-3 text-center font-semibold">Qtd</th>
+                <th className="p-3 text-left font-semibold">Parceiro</th>
+                <th className="p-3 text-left font-semibold">Empresa</th>
+                <th className="p-3 text-left font-semibold">Prazo</th>
+                <th className="p-3 text-center font-semibold">Progresso</th>
+                <th className="p-3 text-center font-semibold">Status</th>
+                <th className="p-3 text-center font-semibold">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPOs.map((po, idx) => {
+                const order = orderMap[po.order_id];
+                const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < now && po.status !== "finalizado";
+                const selectable = po.status === "planejamento" || po.status === "em_producao" || po.status === "pausado";
+                return (
+                  <tr
+                    key={po.id}
+                    className={cn(
+                      "border-b hover:bg-muted/30 transition-colors",
+                      idx % 2 === 0 ? "bg-white/50" : "bg-muted/10",
+                      isOverdue && "bg-red-50/30"
+                    )}
+                  >
+                    <td className="p-2">
+                      <Checkbox
+                        checked={selectedIds.has(po.id)}
+                        onCheckedChange={() => selectable && toggleSelect(po.id)}
+                        disabled={!selectable}
+                        className="w-4 h-4"
+                      />
+                    </td>
+                    <td className="p-3 font-mono font-bold text-primary">{po.unique_number}</td>
+                    <td className="p-3 font-medium">
+                      <div className="truncate">{po.product_name}</div>
+                      {po.reference && <div className="text-[10px] text-muted-foreground">{po.reference}</div>}
+                    </td>
+                    <td className="p-3">
+                      <Link to={`/pedidos/${po.order_id}`} className="text-primary hover:underline font-semibold">
+                        #{po.order_number}
+                      </Link>
+                    </td>
+                    <td className="p-3 text-center font-medium">{po.quantity}</td>
+                    <td className="p-3 truncate">{order?.client_name || "-"}</td>
+                    <td className="p-3 truncate">{order?.cost_center || po.cost_center || "-"}</td>
+                    <td className="p-3">
+                      {po.delivery_deadline ? format(new Date(po.delivery_deadline), "dd/MM/yy") : "-"}
+                      {isOverdue && <div className="text-red-600 font-semibold text-[9px]">Atrasado</div>}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1">
+                        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={cn("h-full rounded-full", po.status === "finalizado" ? "bg-emerald-500" : "bg-primary")}
+                            style={{
+                              width: `${po.status === "finalizado" ? 100 : Math.round(((po.current_step_index ?? 0) / (po.production_sequence?.length || 1)) * 100)}%`
+                            }}
+                          />
+                        </div>
+                        <span className="text-[9px] w-8 text-right">{po.status === "finalizado" ? 100 : Math.round(((po.current_step_index ?? 0) / (po.production_sequence?.length || 1)) * 100)}%</span>
+                      </div>
+                    </td>
+                    <td className="p-3 text-center">
+                      <Badge variant="outline" className={cn("text-[9px] py-0", STATUS_COLORS[po.status])}>
+                        {STATUS_LABELS[po.status]}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-center">
+                      {po.status === "planejamento" && (
+                        <Button size="sm" variant="outline" onClick={() => startProduction(po)} className="h-6 px-1.5 text-[10px]">
+                          <Play className="w-3 h-3" />
+                        </Button>
+                      )}
+                      {po.status === "em_producao" && (
+                        <Button size="sm" variant="outline" onClick={() => pauseProduction(po)} className="h-6 px-1.5 text-[10px]">
+                          <Pause className="w-3 h-3" />
+                        </Button>
+                      )}
+                      {po.status === "pausado" && (
+                        <Button size="sm" variant="outline" onClick={() => startProduction(po)} className="h-6 px-1.5 text-[10px] text-amber-600 border-amber-300">
+                          <Play className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
