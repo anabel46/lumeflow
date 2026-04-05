@@ -11,13 +11,37 @@ export const SECTORS = [
   { id: "montagem_perfil", label: "Montagem Perfil", icon: "Layers" },
   { id: "montagem_embutidos", label: "Montagem Embutidos", icon: "Box" },
   { id: "controle_qualidade", label: "Controle de Qualidade", icon: "ShieldCheck" },
+  { id: "mesa_barra", label: "Mesa Barra", icon: "Store" },
+  { id: "mesa_ipanema", label: "Mesa Ipanema", icon: "Store" },
+  { id: "mesa_sao_gabriel", label: "Mesa São Gabriel", icon: "Store" },
+  { id: "mesa_vila_madalena", label: "Mesa Vila Madalena", icon: "Store" },
+  { id: "mesa_fabrica", label: "Mesa Fábrica", icon: "Store" },
   { id: "embalagem", label: "Embalagem", icon: "Package" },
+  { id: "agendamento", label: "Agendamento", icon: "Calendar" },
+  { id: "expedicao", label: "Expedição", icon: "Truck" },
 ];
 
 export const SECTOR_LABELS = SECTORS.reduce((acc, s) => {
   acc[s.id] = s.label;
   return acc;
 }, {});
+
+// Mapeamento de localização de compra → mesa correspondente
+export const LOCATION_TO_MESA = {
+  "barra": "mesa_barra",
+  "ipanema": "mesa_ipanema",
+  "sao_gabriel": "mesa_sao_gabriel",
+  "vila_madalena": "mesa_vila_madalena",
+  "fabrica": "mesa_fabrica",
+};
+
+export const PURCHASE_LOCATIONS = [
+  { id: "barra", label: "Barra", mesa: "mesa_barra" },
+  { id: "ipanema", label: "Ipanema", mesa: "mesa_ipanema" },
+  { id: "sao_gabriel", label: "São Gabriel", mesa: "mesa_sao_gabriel" },
+  { id: "vila_madalena", label: "Vila Madalena", mesa: "mesa_vila_madalena" },
+  { id: "fabrica", label: "Fábrica", mesa: "mesa_fabrica" },
+];
 
 export const STATUS_COLORS = {
   aprovacao_pendente: "bg-amber-100 text-amber-800 border-amber-300",

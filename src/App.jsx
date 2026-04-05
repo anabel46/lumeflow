@@ -20,6 +20,8 @@ import Sac from '@/pages/Sac';
 import Reports from '@/pages/Reports';
 import Administration from '@/pages/Administration';
 import ReservatTecnica from '@/pages/ReservatTecnica';
+import Agendamento from '@/pages/Agendamento';
+import Expedicao from '@/pages/Expedicao';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -59,6 +61,8 @@ const AuthenticatedApp = () => {
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/administracao" element={<Administration />} />
         <Route path="/reserva-tecnica" element={<ReservatTecnica />} />
+        <Route path="/agendamento" element={<Agendamento />} />
+        <Route path="/expedicao" element={<Expedicao />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

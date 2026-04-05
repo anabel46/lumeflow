@@ -66,6 +66,7 @@ export default function OrderDetail() {
         cost_center: order?.cost_center,
         request_date: order?.request_date,
         environment: order?.environment,
+        purchase_location: order?.purchase_location,
         observations: data.observations,
         technical_drawing_url: product?.technical_drawing_url,
         production_sequence: product?.production_sequence || [],
@@ -94,6 +95,7 @@ export default function OrderDetail() {
           cost_center: order?.cost_center,
           request_date: order?.request_date,
           environment: order?.environment,
+          purchase_location: order?.purchase_location,
           observations: `Intermediário para ${unique} - ${product?.name}`,
           technical_drawing_url: compProduct?.technical_drawing_url,
           production_sequence: compProduct?.production_sequence || [],
@@ -154,6 +156,12 @@ export default function OrderDetail() {
           <p className="text-xs text-muted-foreground">Ambiente</p>
           <p className="font-medium mt-1">{order.environment || "-"}</p>
         </div>
+        {order.purchase_location && (
+          <div>
+            <p className="text-xs text-muted-foreground">Localização da Compra</p>
+            <p className="font-medium mt-1 capitalize">{order.purchase_location.replace(/_/g, " ")}</p>
+          </div>
+        )}
         {order.observations && (
           <div className="col-span-full">
             <p className="text-xs text-muted-foreground">Observações do Comercial</p>

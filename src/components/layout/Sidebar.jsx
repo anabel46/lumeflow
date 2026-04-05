@@ -4,7 +4,8 @@ import {
   LayoutDashboard, ClipboardList, Package, Factory, Warehouse,
   ShieldCheck, ChevronLeft, ChevronRight, BookOpen,
   Scissors, Flame, Paintbrush, CircleDot, Palette, Sparkles,
-  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, Headphones, FileText, UserCog, Briefcase
+  Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, Headphones, FileText, UserCog, Briefcase,
+  Truck, Calendar, Store
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTORS } from "@/lib/constants";
@@ -12,6 +13,7 @@ import { SECTORS } from "@/lib/constants";
 const iconMap = {
   Stamp: Factory, Cog, Scissors, Flame, Paintbrush, CircleDot,
   Palette, Sparkles, Zap, Layers, Box, ShieldCheck, Package: PackageIcon,
+  Store, Calendar, Truck,
 };
 
 const mainNav = [
@@ -22,6 +24,8 @@ const mainNav = [
   { path: "/estoque", label: "Estoque", icon: Warehouse },
   { path: "/qualidade", label: "Qualidade", icon: ShieldCheck },
   { path: "/sac", label: "SAC", icon: Headphones },
+  { path: "/agendamento", label: "Agendamento", icon: Calendar },
+  { path: "/expedicao", label: "Expedição", icon: Truck },
   { path: "/reserva-tecnica", label: "Reserva Técnica", icon: Briefcase },
   { path: "/relatorios", label: "Relatórios", icon: FileText },
   { path: "/administracao", label: "Administração", icon: UserCog },

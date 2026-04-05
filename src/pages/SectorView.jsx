@@ -8,10 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SECTORS } from "@/lib/constants";
+
+const QC_CHECK_ITEMS = [
+  { key: "visual_appearance", label: "Aparência Visual" },
+  { key: "dimensions", label: "Dimensões" },
+  { key: "finish_quality", label: "Qualidade do Acabamento" },
+  { key: "paint_quality", label: "Qualidade da Pintura" },
+  { key: "electrical_test", label: "Teste Elétrico" },
+  { key: "assembly_integrity", label: "Integridade da Montagem" },
+  { key: "packaging", label: "Embalagem" },
+];
 import {
-  Search, CheckCircle2, AlertTriangle, Play, Clock, Star,
+  Search, CheckCircle2, AlertTriangle, Play, Clock,
   Eye, Store, MapPin, MessageSquare, Package, ArrowRight,
-  Wrench, ChevronRight, ChevronDown, ExternalLink
+  Wrench, ChevronRight, ChevronDown, ExternalLink, Truck, Calendar
 } from "lucide-react";
 import PODetailModal from "@/components/production/PODetailModal";
 import StockDeductionAlert from "@/components/production/StockDeductionAlert";
@@ -19,14 +31,17 @@ import ReturnIssueDialog from "@/components/production/ReturnIssueDialog";
 import { format, formatDistanceStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { SECTOR_LABELS } from "@/lib/constants";
+import { SECTOR_LABELS, LOCATION_TO_MESA, PURCHASE_LOCATIONS } from "@/lib/constants";
 import { useNotifications } from "@/lib/NotificationContext";
 
-// Setores que usam visualização individual (por OP), não por pedido
+// Setores que usam visualização individual (por OP)
 const INDIVIDUAL_SECTORS = ["estamparia", "tornearia"];
 
-// Setores de montagem que agrupam por ambiente
+// Setores de montagem: visualização kanban por pedido → ambiente
 const ASSEMBLY_SECTORS = ["montagem_decorativa", "montagem_eletrica", "montagem_perfil", "montagem_embutidos"];
+
+// Mesas de loja
+const MESA_SECTORS = ["mesa_barra", "mesa_ipanema", "mesa_sao_gabriel", "mesa_vila_madalena", "mesa_fabrica"];
 
 const SECTOR_STATUS_COLORS = {
   aguardando: "border-l-amber-400",
@@ -34,19 +49,7 @@ const SECTOR_STATUS_COLORS = {
   concluido: "border-l-emerald-500",
 };
 
-function StarRating({ value, onChange }) {
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button key={star} type="button" onClick={() => onChange(star)}>
-          <Star className={cn("w-5 h-5 transition-colors", star <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30")} />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─── Card individual de OP (estamparia / tornearia) ───────────────────────────
+// ─── Card individual de OP (estamparia / tornearia / mesas) ───────────────────
 function OrderCard({ po, onStart, onComplete, onDetail }) {
   const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < new Date() && po.sector_status !== "concluido";
   const sectorStatus = po.sector_status || "aguardando";
@@ -96,7 +99,6 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
         </Link>
         <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
         {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
-        {po.cost_center && <span className="flex items-center gap-0.5"><Store className="w-3 h-3" />{po.cost_center}</span>}
         {po.environment && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{po.environment}</span>}
         {po.delivery_deadline && (
           <span className={cn(isOverdue ? "text-red-500 font-semibold" : "")}>
@@ -132,7 +134,7 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
                   isCurrent ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" :
                   "bg-muted text-muted-foreground/60"
                 )}>
-                  {SECTOR_LABELS[s]?.substring(0, 8) || s}
+                  {SECTOR_LABELS[s]?.substring(0, 10) || s}
                 </span>
                 {i < po.production_sequence.length - 1 && (
                   <ChevronRight className="w-2 h-2 text-muted-foreground/30 shrink-0" />
@@ -146,7 +148,7 @@ function OrderCard({ po, onStart, onComplete, onDetail }) {
   );
 }
 
-// ─── Mini row de OP dentro do card de pedido ──────────────────────────────────
+// ─── Mini row de OP dentro do card de pedido (montagem) ──────────────────────
 function PORow({ po, onStart, onComplete, onDetail }) {
   const isOverdue = po.delivery_deadline && new Date(po.delivery_deadline) < new Date() && po.sector_status !== "concluido";
   const sectorStatus = po.sector_status || "aguardando";
@@ -160,14 +162,12 @@ function PORow({ po, onStart, onComplete, onDetail }) {
       "bg-muted/30 border-border/40",
       isOverdue && !isDone && "bg-red-50/30 border-red-100"
     )}>
-      {/* Status dot */}
       <div className={cn("w-2 h-2 rounded-full shrink-0",
         isDone ? "bg-emerald-500" :
         sectorStatus === "em_producao" ? "bg-blue-500 animate-pulse" :
         "bg-amber-400"
       )} />
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="font-mono text-[11px] font-bold text-muted-foreground">{po.unique_number}</span>
@@ -193,9 +193,32 @@ function PORow({ po, onStart, onComplete, onDetail }) {
             </span>
           )}
         </div>
+        {/* Sequência */}
+        {po.production_sequence?.length > 0 && (
+          <div className="flex items-center gap-0.5 mt-1 overflow-x-auto pb-0.5 no-scrollbar">
+            {po.production_sequence.map((s, i) => {
+              const isSectorDone = i < (po.current_step_index ?? 0);
+              const isCurrent = s === po.current_sector;
+              return (
+                <React.Fragment key={i}>
+                  <span className={cn(
+                    "text-[8px] px-1 py-0.5 rounded font-medium whitespace-nowrap",
+                    isSectorDone ? "bg-emerald-100 text-emerald-700" :
+                    isCurrent ? "bg-blue-100 text-blue-700 ring-1 ring-blue-200" :
+                    "bg-muted/60 text-muted-foreground/50"
+                  )}>
+                    {SECTOR_LABELS[s]?.substring(0, 8) || s}
+                  </span>
+                  {i < po.production_sequence.length - 1 && (
+                    <ChevronRight className="w-1.5 h-1.5 text-muted-foreground/20 shrink-0" />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
         <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-6 w-6 p-0">
           <Eye className="w-3 h-3" />
@@ -218,8 +241,8 @@ function PORow({ po, onStart, onComplete, onDetail }) {
   );
 }
 
-// ─── Card agrupado por pedido ─────────────────────────────────────────────────
-function OrderGroupCard({ orderNumber, orderId, pos, costCenter, environment, deliveryDeadline, observations, onStart, onComplete, onDetail }) {
+// ─── Card de pedido agrupado (montagem: por pedido → por ambiente) ─────────────
+function AssemblyOrderCard({ orderNumber, orderId, pos, deliveryDeadline, observations, onStart, onComplete, onDetail }) {
   const [expanded, setExpanded] = useState(true);
   const now = new Date();
   const isOverdue = deliveryDeadline && new Date(deliveryDeadline) < now;
@@ -228,8 +251,15 @@ function OrderGroupCard({ orderNumber, orderId, pos, costCenter, environment, de
   const done = pos.filter(p => p.sector_status === "concluido").length;
   const inProd = pos.filter(p => p.sector_status === "em_producao").length;
   const allDone = done === total;
-
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  // Group POs by ambiente
+  const byEnv = {};
+  pos.forEach(po => {
+    const env = po.environment || "Sem ambiente";
+    if (!byEnv[env]) byEnv[env] = [];
+    byEnv[env].push(po);
+  });
 
   return (
     <div className={cn(
@@ -237,12 +267,10 @@ function OrderGroupCard({ orderNumber, orderId, pos, costCenter, environment, de
       isOverdue && !allDone && "border-red-200",
       allDone && "opacity-70"
     )}>
-      {/* Header */}
       <button
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
-        {/* Left: order info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Link
@@ -262,24 +290,20 @@ function OrderGroupCard({ orderNumber, orderId, pos, costCenter, environment, de
               <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200 py-0">✓ Concluído</Badge>
             )}
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-0 text-[11px] text-muted-foreground mt-0.5">
-            {costCenter && <span className="flex items-center gap-0.5"><Store className="w-2.5 h-2.5" />{costCenter}</span>}
-            {environment && <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{environment}</span>}
+          <div className="flex flex-wrap gap-x-3 text-[11px] text-muted-foreground mt-0.5">
             {deliveryDeadline && (
               <span className={cn(isOverdue && !allDone ? "text-red-500 font-semibold" : "")}>
                 Prazo: {format(new Date(deliveryDeadline), "dd/MM/yy")}
               </span>
             )}
+            <span>{Object.keys(byEnv).length} ambiente(s)</span>
           </div>
         </div>
-
-        {/* Right: progress */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right hidden sm:block">
             <p className="text-xs font-semibold">{done}/{total} OPs</p>
             {inProd > 0 && <p className="text-[10px] text-blue-600">{inProd} produzindo</p>}
           </div>
-          {/* Mini progress ring */}
           <div className="relative w-8 h-8 shrink-0">
             <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
               <circle cx="16" cy="16" r="12" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
@@ -297,7 +321,6 @@ function OrderGroupCard({ orderNumber, orderId, pos, costCenter, environment, de
         </div>
       </button>
 
-      {/* Observation bar */}
       {observations && (
         <div className="mx-4 mb-2 flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
           <MessageSquare className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
@@ -305,43 +328,24 @@ function OrderGroupCard({ orderNumber, orderId, pos, costCenter, environment, de
         </div>
       )}
 
-      {/* OP rows */}
       {expanded && (
-        <div className="px-3 pb-3 space-y-1.5">
-          {pos.map(po => (
-            <PORow key={po.id} po={po} onStart={onStart} onComplete={onComplete} onDetail={onDetail} />
+        <div className="px-3 pb-3 space-y-3">
+          {Object.entries(byEnv).map(([env, envPos]) => (
+            <div key={env}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <MapPin className="w-3 h-3 text-primary" />
+                <span className="text-xs font-semibold text-primary">{env}</span>
+                <span className="text-[10px] text-muted-foreground">({envPos.length} OP)</span>
+              </div>
+              <div className="space-y-1.5 pl-4 border-l-2 border-primary/20">
+                {envPos.map(po => (
+                  <PORow key={po.id} po={po} onStart={onStart} onComplete={onComplete} onDetail={onDetail} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── Ghost card (concluído) ───────────────────────────────────────────────────
-function GhostCard({ po, onDetail }) {
-  return (
-    <div className="bg-muted/30 rounded-xl border border-dashed border-muted-foreground/20 p-3 opacity-75">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-mono text-xs text-muted-foreground px-1.5 py-0.5 bg-muted rounded font-bold">{po.unique_number}</span>
-            {po.is_intermediate && (
-              <Badge variant="outline" className="text-[10px] text-muted-foreground border-muted-foreground/30">Inter.</Badge>
-            )}
-          </div>
-          <p className="text-sm font-medium text-muted-foreground mt-1 leading-tight">{po.product_name}</p>
-          <div className="flex gap-3 text-[11px] text-muted-foreground/70 mt-0.5">
-            <span>Ped. #{po.order_number}</span>
-            <span>Qtd: {po.quantity}</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">✓</Badge>
-          <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-6 px-1.5 text-[11px] text-muted-foreground">
-            <Eye className="w-3 h-3" />
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -367,10 +371,42 @@ function GhostGroupCard({ orderNumber, orderId, pos, onDetail }) {
       {expanded && (
         <div className="px-3 pb-3 space-y-1.5">
           {pos.map(po => (
-            <GhostCard key={po.id} po={po} onDetail={onDetail} />
+            <div key={po.id} className="bg-muted/30 rounded-lg border border-dashed p-2.5 opacity-75 flex items-center justify-between gap-2">
+              <div>
+                <span className="font-mono text-[10px] text-muted-foreground">{po.unique_number}</span>
+                <p className="text-xs font-medium">{po.product_name}</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-6 px-1.5">
+                <Eye className="w-3 h-3" />
+              </Button>
+            </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Ghost card simples ───────────────────────────────────────────────────────
+function GhostCard({ po, onDetail }) {
+  return (
+    <div className="bg-muted/30 rounded-xl border border-dashed border-muted-foreground/20 p-3 opacity-75">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <span className="font-mono text-xs text-muted-foreground px-1.5 py-0.5 bg-muted rounded font-bold">{po.unique_number}</span>
+          <p className="text-sm font-medium text-muted-foreground mt-1 leading-tight">{po.product_name}</p>
+          <div className="flex gap-3 text-[11px] text-muted-foreground/70 mt-0.5">
+            <span>Ped. #{po.order_number}</span>
+            <span>Qtd: {po.quantity}</span>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">✓</Badge>
+          <Button variant="ghost" size="sm" onClick={() => onDetail(po)} className="h-6 px-1.5">
+            <Eye className="w-3 h-3" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -393,7 +429,17 @@ export default function SectorView() {
   const { sectorId } = useParams();
   const [search, setSearch] = useState("");
   const [completing, setCompleting] = useState(null);
-  const [completionForm, setCompletionForm] = useState({ observations: "", changes: "", rating: 0, operator: "" });
+  const [completionForm, setCompletionForm] = useState({ observations: "", changes: "", operator: "" });
+  // For embalagem: next destination + QC
+  const [embalagemDest, setEmbalagemDest] = useState("auto");
+  const [qcForm, setQcForm] = useState({
+    inspector: "",
+    visual_appearance: "na", dimensions: "na", finish_quality: "na", paint_quality: "na",
+    electrical_test: "na", assembly_integrity: "na", packaging: "na",
+    overall_result: "aprovado", qc_observations: "",
+    correction_sector: "",
+  });
+  const qcNeedsCorrection = qcForm.overall_result === "reprovado" || qcForm.overall_result === "retrabalho";
   const [detailPO, setDetailPO] = useState(null);
   const [stockAlert, setStockAlert] = useState(null);
   const [startingPO, setStartingPO] = useState(null);
@@ -404,6 +450,8 @@ export default function SectorView() {
 
   const isIndividual = INDIVIDUAL_SECTORS.includes(sectorId);
   const isAssembly = ASSEMBLY_SECTORS.includes(sectorId);
+  const isMesa = MESA_SECTORS.includes(sectorId);
+  const isEmbalagem = sectorId === "embalagem";
   const sectorLabel = SECTOR_LABELS[sectorId] || sectorId;
 
   const { data: stockItems = [] } = useQuery({
@@ -417,7 +465,6 @@ export default function SectorView() {
     refetchInterval: 30000,
   });
 
-  // Fetch all orders to get metadata (client, env, obs, deadline) and approval status
   const { data: allOrders = [] } = useQuery({
     queryKey: ["orders"],
     queryFn: () => base44.entities.Order.list("-created_date", 500),
@@ -446,23 +493,16 @@ export default function SectorView() {
   };
 
   const handleStartClick = async (po) => {
-    // Block start if parent order is still pending approval
     const parentOrder = allOrders.find(o => o.id === po.order_id);
     if (parentOrder?.status === "aprovacao_pendente") {
-      alert(`O pedido #${po.order_number} ainda está aguardando aprovação do gerente. Não é possível iniciar a produção.`);
+      alert(`O pedido #${po.order_number} ainda está aguardando aprovação do gerente.`);
       return;
     }
-
-    // Show return issue dialog for sectors after the first
     if ((po.current_step_index || 0) > 0) {
       setReturnIssueDialog(po);
       return;
     }
-
-    if (stockItems.length === 0) {
-      startMutation.mutate(po);
-      return;
-    }
+    if (stockItems.length === 0) { startMutation.mutate(po); return; }
     const product = await base44.entities.Product.filter({ id: po.product_id }).then(r => r?.[0]).catch(() => null);
     const components = product?.components || [];
     if (components.length === 0) { startMutation.mutate(po); return; }
@@ -473,12 +513,8 @@ export default function SectorView() {
       const currentStock = stockItem ? (stockItem.quantity_factory || 0) : 0;
       const afterStock = currentStock - needed;
       return {
-        name: comp.name,
-        code: comp.reference || "-",
-        unit: stockItem?.unit || "un",
-        needed,
-        currentStock,
-        stockItemId: stockItem?.id || null,
+        name: comp.name, code: comp.reference || "-", unit: stockItem?.unit || "un",
+        needed, currentStock, stockItemId: stockItem?.id || null,
         insufficient: currentStock < needed,
         willBeLow: stockItem && afterStock < (stockItem.minimum_stock || 0) && afterStock >= 0,
       };
@@ -498,15 +534,10 @@ export default function SectorView() {
       const newQty = Math.max(0, (item.quantity_factory || 0) - d.needed);
       await base44.entities.StockItem.update(d.stockItemId, { quantity_factory: newQty });
       await base44.entities.StockMovement.create({
-        stock_item_id: d.stockItemId,
-        item_name: d.name,
-        item_code: d.code,
-        movement_type: "saida",
-        quantity: d.needed,
-        from_stock: "fabril",
+        stock_item_id: d.stockItemId, item_name: d.name, item_code: d.code,
+        movement_type: "saida", quantity: d.needed, from_stock: "fabril",
         reason: `Produção iniciada — OP ${startingPO.unique_number}`,
-        production_order_id: startingPO.id,
-        unique_number: startingPO.unique_number,
+        production_order_id: startingPO.id, unique_number: startingPO.unique_number,
       });
     }
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
@@ -518,12 +549,9 @@ export default function SectorView() {
   const startMutation = useMutation({
     mutationFn: async (po) => {
       await base44.entities.SectorLog.create({
-        production_order_id: po.id,
-        unique_number: po.unique_number,
-        sector: sectorId,
-        action: "entrada",
-        started_at: new Date().toISOString(),
-        timestamp: new Date().toISOString(),
+        production_order_id: po.id, unique_number: po.unique_number,
+        sector: sectorId, action: "entrada",
+        started_at: new Date().toISOString(), timestamp: new Date().toISOString(),
       });
       const updateData = {
         sector_status: "em_producao",
@@ -534,43 +562,80 @@ export default function SectorView() {
       if (returnData) {
         updateData.return_from_sector = {
           ...returnData,
-          from_sector: po.current_sector === "" || po.current_step_index === 0 ? null : SECTOR_LABELS[po.production_sequence?.[po.current_step_index - 1]],
+          from_sector: SECTOR_LABELS[po.production_sequence?.[po.current_step_index - 1]] || null,
         };
       }
       return base44.entities.ProductionOrder.update(po.id, updateData);
     },
-    onSuccess: () => {
-      setReturnData(null);
-      setReturnIssueDialog(null);
-      invalidateAll();
-    },
+    onSuccess: () => { setReturnData(null); setReturnIssueDialog(null); invalidateAll(); },
   });
 
   const completeMutation = useMutation({
-    mutationFn: async ({ po, observations, changes, rating, operator }) => {
+    mutationFn: async ({ po, observations, changes, operator, destOverride, qc }) => {
       const finishedAt = new Date().toISOString();
       const fullObs = [observations, changes ? `Alterações: ${changes}` : ""].filter(Boolean).join("\n\n");
       await base44.entities.SectorLog.create({
-        production_order_id: po.id,
-        unique_number: po.unique_number,
-        sector: sectorId,
-        action: "saida",
-        observations: fullObs,
-        rating,
-        operator,
-        started_at: po.sector_started_at || null,
-        finished_at: finishedAt,
+        production_order_id: po.id, unique_number: po.unique_number,
+        sector: sectorId, action: "saida",
+        observations: fullObs, operator,
+        started_at: po.sector_started_at || null, finished_at: finishedAt,
         timestamp: finishedAt,
       });
+
+      // Special logic for embalagem: QC + determine next sector
+      if (isEmbalagem) {
+        // Save quality check
+        const { correction_sector, qc_observations, inspector, ...qcChecks } = qc || {};
+        await base44.entities.QualityCheck.create({
+          production_order_id: po.id,
+          unique_number: po.unique_number,
+          product_name: po.product_name,
+          inspector: inspector || operator,
+          observations: qc_observations || "",
+          ...qcChecks,
+        });
+
+        // If reprovado/retrabalho, send back to correction sector
+        if ((qcChecks.overall_result === "reprovado" || qcChecks.overall_result === "retrabalho") && correction_sector) {
+          return base44.entities.ProductionOrder.update(po.id, {
+            current_sector: correction_sector,
+            sector_status: "aguardando",
+            sector_started_at: null,
+            status: "em_producao",
+          });
+        }
+
+        // Approved: determine next sector
+        let nextSector = destOverride;
+        if (!nextSector || nextSector === "auto") {
+          const loc = po.purchase_location;
+          nextSector = loc && LOCATION_TO_MESA[loc] ? LOCATION_TO_MESA[loc] : "agendamento";
+        }
+        return base44.entities.ProductionOrder.update(po.id, {
+          current_sector: nextSector,
+          sector_status: "aguardando",
+          sector_started_at: null,
+          current_step_index: (po.current_step_index || 0) + 1,
+        });
+      }
+
+      // Special logic for mesas: → agendamento
+      if (isMesa) {
+        return base44.entities.ProductionOrder.update(po.id, {
+          current_sector: "agendamento",
+          sector_status: "aguardando",
+          sector_started_at: null,
+          current_step_index: (po.current_step_index || 0) + 1,
+        });
+      }
+
+      // Normal flow
       const nextIndex = (po.current_step_index || 0) + 1;
       const sequence = po.production_sequence || [];
       if (nextIndex >= sequence.length) {
         return base44.entities.ProductionOrder.update(po.id, {
-          current_step_index: nextIndex,
-          current_sector: "",
-          sector_status: "concluido",
-          status: "finalizado",
-          finished_at: finishedAt,
+          current_step_index: nextIndex, current_sector: "",
+          sector_status: "concluido", status: "finalizado", finished_at: finishedAt,
         });
       } else {
         return base44.entities.ProductionOrder.update(po.id, {
@@ -584,7 +649,13 @@ export default function SectorView() {
     onSuccess: () => {
       invalidateAll();
       setCompleting(null);
-      setCompletionForm({ observations: "", changes: "", rating: 0, operator: "" });
+      setCompletionForm({ observations: "", changes: "", operator: "" });
+      setEmbalagemDest("auto");
+      setQcForm({
+        inspector: "", visual_appearance: "na", dimensions: "na", finish_quality: "na",
+        paint_quality: "na", electrical_test: "na", assembly_integrity: "na", packaging: "na",
+        overall_result: "aprovado", qc_observations: "", correction_sector: "",
+      });
     },
   });
 
@@ -604,18 +675,7 @@ export default function SectorView() {
   const doneAll = [...doneHere, ...passed.filter(p => !doneHere.some(d => d.id === p.id))];
   const returns = filterOrders(productionOrders.filter(po => po.return_from_sector?.has_issues));
 
-  // Group by environment for assembly sectors
-  const groupByEnvironment = (pos) => {
-    const map = {};
-    pos.forEach(po => {
-      const env = po.environment || "Sem ambiente";
-      if (!map[env]) map[env] = [];
-      map[env].push(po);
-    });
-    return Object.entries(map).map(([env, items]) => ({ env, pos: items }));
-  };
-
-  // Group by order for non-individual sectors
+  // Group by order
   const groupByOrder = (pos) => {
     const map = {};
     pos.forEach(po => {
@@ -623,10 +683,7 @@ export default function SectorView() {
       if (!map[key]) {
         const order = allOrders.find(o => o.id === po.order_id);
         map[key] = {
-          orderNumber: po.order_number,
-          orderId: po.order_id,
-          costCenter: po.cost_center || order?.cost_center,
-          environment: po.environment || order?.environment,
+          orderNumber: po.order_number, orderId: po.order_id,
           deliveryDeadline: po.delivery_deadline || order?.delivery_deadline,
           observations: po.observations || order?.observations,
           pos: [],
@@ -637,16 +694,11 @@ export default function SectorView() {
     return Object.values(map);
   };
 
-  // For grouped view: active = waiting + inProgress mixed per order group
   const activeForGroup = filterOrders(productionOrders.filter(po => po.sector_status !== "concluido"));
   const activeGroups = groupByOrder(activeForGroup);
   const doneGroups = groupByOrder(doneAll);
 
-  // Count unique orders for badge
-  const waitingCount = isIndividual ? waiting.length : groupByOrder(waiting).length;
-  const inProgCount = isIndividual ? inProgress.length : groupByOrder(inProgress).length;
-  const doneCount = isIndividual ? doneAll.length : doneGroups.length;
-
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -658,36 +710,22 @@ export default function SectorView() {
           <div>
             <h1 className="text-2xl font-bold">{sectorLabel}</h1>
             <p className="text-sm text-muted-foreground">
-              {isIndividual ? `${productionOrders.length} ordens` : `${activeGroups.length} pedidos · ${productionOrders.length} OPs`} neste setor
+              {isAssembly || (!isIndividual && !isMesa && !isEmbalagem)
+                ? `${activeGroups.length} pedidos · ${productionOrders.length} OPs`
+                : `${productionOrders.length} ordens`} neste setor
             </p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {isIndividual ? (
-            <>
-              <Badge variant="outline" className="gap-1.5 bg-amber-50 border-amber-200 text-amber-700">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />{waiting.length} aguardando
-              </Badge>
-              <Badge variant="outline" className="gap-1.5 bg-blue-50 border-blue-200 text-blue-700">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{inProgress.length} em produção
-              </Badge>
-              <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-700">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{doneAll.length} concluídos
-              </Badge>
-            </>
-          ) : (
-            <>
-              <Badge variant="outline" className="gap-1.5 bg-amber-50 border-amber-200 text-amber-700">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />{activeGroups.length} pedidos ativos
-              </Badge>
-              <Badge variant="outline" className="gap-1.5 bg-blue-50 border-blue-200 text-blue-700">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{inProgress.length} OPs em produção
-              </Badge>
-              <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-700">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{doneGroups.length} pedidos concluídos
-              </Badge>
-            </>
-          )}
+          <Badge variant="outline" className="gap-1.5 bg-amber-50 border-amber-200 text-amber-700">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />{waiting.length} aguardando
+          </Badge>
+          <Badge variant="outline" className="gap-1.5 bg-blue-50 border-blue-200 text-blue-700">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{inProgress.length} em produção
+          </Badge>
+          <Badge variant="outline" className="gap-1.5 bg-emerald-50 border-emerald-200 text-emerald-700">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{doneAll.length} concluídos
+          </Badge>
         </div>
       </div>
 
@@ -700,210 +738,9 @@ export default function SectorView() {
       {isLoading ? (
         <div className="text-center p-8 text-muted-foreground">Carregando...</div>
       ) : isAssembly ? (
-        /* ── VISUALIZAÇÃO POR AMBIENTE (montagens) ── */
-        <div className="space-y-6">
-          {/* Retornos */}
-          {returns.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                <span className="font-semibold text-sm">Retornos</span>
-                <Badge variant="secondary" className="text-xs ml-auto">{returns.length}</Badge>
-              </div>
-              <div className="grid gap-3">
-                {returns.map(po => (
-                  <div key={po.id} className="bg-card rounded-xl border border-red-200 p-3">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
-                      <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 py-0.5">⚠ Retorno</Badge>
-                    </div>
-                    <p className="font-semibold text-sm">{po.product_name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Ped. #{po.order_number} · {po.environment || "Sem ambiente"}</p>
-                    {po.return_from_sector?.issue_quantity > 0 && (
-                      <p className="text-xs text-red-600 font-medium mt-1">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong>/{po.quantity}</p>
-                    )}
-                    <Button size="sm" className="mt-2.5 w-full gap-1 bg-red-600 hover:bg-red-700 text-xs" onClick={() => handleStartClick(po)}>
-                      <AlertTriangle className="w-3 h-3" /> Corrigir
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Agrupado por Ambiente */}
-          <div className="space-y-6">
-            {groupByEnvironment([...waiting, ...inProgress]).map((group) => (
-              <div key={group.env}>
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <MapPin className="w-4 h-4 text-primary" />
-                  <span className="font-semibold text-sm">{group.env}</span>
-                  <Badge variant="secondary" className="text-xs ml-auto">{group.pos.length} OP(s)</Badge>
-                </div>
-                <div className="space-y-2.5">
-                  {group.pos.map(po => {
-                    const waitingPos = waiting.find(w => w.id === po.id);
-                    const inProgPos = inProgress.find(ip => ip.id === po.id);
-                    const isWaiting = !!waitingPos;
-                    const isInProg = !!inProgPos;
-
-                    return (
-                      <div
-                        key={po.id}
-                        className={cn(
-                          "rounded-lg border p-3 transition-all",
-                          isInProg ? "bg-blue-50/50 border-blue-100" : "bg-muted/30 border-border/40"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <div>
-                            <span className="font-mono text-xs font-bold text-primary">{po.unique_number}</span>
-                            <p className="font-semibold text-sm mt-0.5">{po.product_name}</p>
-                            {po.reference && <p className="text-[10px] text-muted-foreground font-mono">{po.reference}</p>}
-                          </div>
-                          <div className="flex gap-1 shrink-0">
-                            <Button variant="ghost" size="sm" onClick={() => setDetailPO(po)} className="h-6 w-6 p-0">
-                              <Eye className="w-3 h-3" />
-                            </Button>
-                            {isWaiting && (
-                              <Button size="sm" variant="outline" onClick={() => handleStartClick(po)} className="h-6 px-2 text-[11px] gap-0.5">
-                                <Play className="w-3 h-3" />
-                              </Button>
-                            )}
-                            {isInProg && (
-                              <Button size="sm" onClick={() => setCompleting(po)} className="h-6 px-2 text-[11px] gap-0.5 bg-emerald-600 hover:bg-emerald-700">
-                                <CheckCircle2 className="w-3 h-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
-                          <span>Pedido: <strong className="text-foreground">#{po.order_number}</strong></span>
-                          <span>Qtd: <strong className="text-foreground">{po.quantity}</strong></span>
-                          {po.color && <span>Cor: <strong className="text-foreground">{po.color}</strong></span>}
-                          {po.cost_center && <span className="flex items-center gap-0.5"><Store className="w-3 h-3" />{po.cost_center}</span>}
-                        </div>
-
-                        {/* Sequência */}
-                        {po.production_sequence?.length > 0 && (
-                          <div className="flex items-center gap-0.5 mt-2 overflow-x-auto pb-0.5 no-scrollbar">
-                            {po.production_sequence.map((s, i) => {
-                              const isDone = i < (po.current_step_index ?? 0);
-                              const isCurrent = s === po.current_sector;
-                              return (
-                                <React.Fragment key={i}>
-                                  <span className={cn(
-                                    "text-[9px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap",
-                                    isDone ? "bg-emerald-100 text-emerald-700" :
-                                    isCurrent ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" :
-                                    "bg-muted text-muted-foreground/60"
-                                  )}>
-                                    {SECTOR_LABELS[s]?.substring(0, 8) || s}
-                                  </span>
-                                  {i < po.production_sequence.length - 1 && (
-                                    <ChevronRight className="w-2 h-2 text-muted-foreground/30 shrink-0" />
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {po.sector_started_at && isInProg && (
-                          <div className="flex items-center gap-1 mt-2 text-xs text-blue-600 font-medium">
-                            <Clock className="w-3 h-3" />
-                            {format(new Date(po.sector_started_at), "HH:mm")} · {formatDistanceStrict(new Date(po.sector_started_at), new Date(), { locale: ptBR })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Concluídos */}
-          {doneAll.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="font-semibold text-sm">Concluídos</span>
-                <Badge variant="secondary" className="text-xs ml-auto">{doneAll.length}</Badge>
-              </div>
-              <div className="space-y-2">
-                {doneAll.map(po => (
-                  <div key={po.id} className="bg-muted/30 rounded-lg border border-dashed p-2.5 opacity-60">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <span className="font-mono text-[10px] text-muted-foreground">{po.unique_number}</span>
-                        <p className="text-xs font-medium">{po.product_name}</p>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => setDetailPO(po)} className="h-5 px-1 text-[10px]">
-                        <Eye className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : isIndividual ? (
-        /* ── VISUALIZAÇÃO INDIVIDUAL (estamparia / tornearia) ── */
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-          <KanbanColumn title="Retornos" colorClass="bg-red-500" count={returns.length}>
-            {returns.length === 0
-              ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum retorno</div>
-              : returns.map(po => (
-                  <div key={po.id} className="bg-card rounded-xl border-l-4 border-l-red-500 border p-3 hover:shadow-md transition-all">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
-                      <Badge variant="outline" className="text-[10px] border-red-300 text-red-600 py-0.5 gap-0.5">
-                        <AlertTriangle className="w-2.5 h-2.5" />Retorno
-                      </Badge>
-                    </div>
-                    <p className="font-semibold text-sm">{po.product_name}</p>
-                    <div className="mt-1.5 text-xs space-y-0.5 text-muted-foreground">
-                      <p>Qtd original: <strong>{po.quantity}</strong></p>
-                      {po.return_from_sector?.issue_quantity > 0 && (
-                        <p className="text-red-600 font-medium">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong></p>
-                      )}
-                      {po.return_from_sector?.issue_observations && (
-                        <p className="text-xs italic mt-1 line-clamp-2">{po.return_from_sector.issue_observations}</p>
-                      )}
-                    </div>
-                    <Button size="sm" className="mt-3 w-full gap-1 bg-red-600 hover:bg-red-700" onClick={() => handleStartClick(po)}>
-                      <AlertTriangle className="w-3.5 h-3.5" /> Corrigir
-                    </Button>
-                  </div>
-                ))
-            }
-          </KanbanColumn>
-          <KanbanColumn title="Aguardando" colorClass="bg-amber-400" count={waiting.filter(p => !p.return_from_sector?.has_issues).length}>
-            {waiting.filter(p => !p.return_from_sector?.has_issues).length === 0
-              ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma aguardando</div>
-              : waiting.filter(p => !p.return_from_sector?.has_issues).map(po => <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />)
-            }
-          </KanbanColumn>
-          <KanbanColumn title="Em Produção" colorClass="bg-blue-500" count={inProgress.length}>
-            {inProgress.length === 0
-              ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma em produção</div>
-              : inProgress.map(po => <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />)
-            }
-          </KanbanColumn>
-          <KanbanColumn title="Concluído" colorClass="bg-emerald-500" count={doneAll.length}>
-            {doneAll.length === 0
-              ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma concluída</div>
-              : doneAll.map(po => <GhostCard key={po.id} po={po} onDetail={setDetailPO} />)
-            }
-          </KanbanColumn>
-        </div>
-      ) : (
-        /* ── VISUALIZAÇÃO POR PEDIDO (demais setores) ── */
+        /* ── MONTAGENS: Kanban por pedido → ambiente ── */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Coluna esquerda: retornos */}
+          {/* Retornos */}
           <div>
             <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
               <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-red-500" />
@@ -911,32 +748,28 @@ export default function SectorView() {
               <Badge variant="secondary" className="text-xs ml-auto">{returns.length}</Badge>
             </div>
             <div className="space-y-2.5">
-              {returns.length === 0
-                ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum retorno</div>
-                : returns.map(po => (
-                    <div key={po.id} className="bg-card rounded-xl border border-red-200 p-3 hover:shadow-md transition-all">
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
-                        <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 py-0.5">⚠ Retorno</Badge>
-                      </div>
-                      <p className="font-semibold text-sm">{po.product_name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Ped. #{po.order_number}</p>
-                      {po.return_from_sector?.issue_quantity > 0 && (
-                        <p className="text-xs text-red-600 font-medium mt-1">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong>/{po.quantity}</p>
-                      )}
-                      {po.return_from_sector?.issue_observations && (
-                        <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">{po.return_from_sector.issue_observations}</p>
-                      )}
-                      <Button size="sm" className="mt-2.5 w-full gap-1 bg-red-600 hover:bg-red-700 text-xs" onClick={() => handleStartClick(po)}>
-                        <AlertTriangle className="w-3 h-3" /> Corrigir
-                      </Button>
-                    </div>
-                  ))
-              }
+              {returns.length === 0 ? (
+                <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum retorno</div>
+              ) : returns.map(po => (
+                <div key={po.id} className="bg-card rounded-xl border border-red-200 p-3">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+                    <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200 py-0.5">⚠ Retorno</Badge>
+                  </div>
+                  <p className="font-semibold text-sm">{po.product_name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{po.environment || "Sem ambiente"}</p>
+                  {po.return_from_sector?.issue_quantity > 0 && (
+                    <p className="text-xs text-red-600 font-medium mt-1">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong>/{po.quantity}</p>
+                  )}
+                  <Button size="sm" className="mt-2.5 w-full gap-1 bg-red-600 hover:bg-red-700 text-xs" onClick={() => handleStartClick(po)}>
+                    <AlertTriangle className="w-3 h-3" /> Corrigir
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Coluna meio: pedidos ativos */}
+          {/* Pedidos Ativos */}
           <div>
             <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
               <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-blue-500" />
@@ -944,22 +777,148 @@ export default function SectorView() {
               <Badge variant="secondary" className="text-xs ml-auto">{activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).length}</Badge>
             </div>
             <div className="space-y-3">
-              {activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).length === 0
-                ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum pedido ativo</div>
-                : activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).map(g => (
-                    <OrderGroupCard
-                      key={g.orderId || g.orderNumber}
-                      {...g}
-                      onStart={handleStartClick}
-                      onComplete={setCompleting}
-                      onDetail={setDetailPO}
-                    />
-                  ))
-              }
+              {activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).length === 0 ? (
+                <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum pedido ativo</div>
+              ) : activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).map(g => (
+                <AssemblyOrderCard
+                  key={g.orderId || g.orderNumber}
+                  {...g}
+                  onStart={handleStartClick}
+                  onComplete={setCompleting}
+                  onDetail={setDetailPO}
+                />
+              ))}
             </div>
           </div>
 
-          {/* Coluna direita: pedidos concluídos */}
+          {/* Concluídos */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-500" />
+              <span className="font-semibold text-sm">Concluídos</span>
+              <Badge variant="secondary" className="text-xs ml-auto">{doneGroups.length}</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {doneGroups.length === 0 ? (
+                <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum concluído</div>
+              ) : doneGroups.map(g => (
+                <GhostGroupCard key={g.orderId || g.orderNumber} {...g} onDetail={setDetailPO} />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : isIndividual || isMesa || isEmbalagem ? (
+        /* ── INDIVIDUAL: estamparia, tornearia, mesas, embalagem ── */
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+          <KanbanColumn title="Retornos" colorClass="bg-red-500" count={returns.length}>
+            {returns.length === 0 ? (
+              <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum retorno</div>
+            ) : returns.map(po => (
+              <div key={po.id} className="bg-card rounded-xl border-l-4 border-l-red-500 border p-3 hover:shadow-md">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+                  <Badge variant="outline" className="text-[10px] border-red-300 text-red-600 py-0.5 gap-0.5">
+                    <AlertTriangle className="w-2.5 h-2.5" />Retorno
+                  </Badge>
+                </div>
+                <p className="font-semibold text-sm">{po.product_name}</p>
+                {po.return_from_sector?.issue_quantity > 0 && (
+                  <p className="text-xs text-red-600 font-medium mt-1">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong></p>
+                )}
+                <Button size="sm" className="mt-3 w-full gap-1 bg-red-600 hover:bg-red-700" onClick={() => handleStartClick(po)}>
+                  <AlertTriangle className="w-3.5 h-3.5" /> Corrigir
+                </Button>
+              </div>
+            ))}
+          </KanbanColumn>
+          <KanbanColumn title="Aguardando" colorClass="bg-amber-400" count={waiting.filter(p => !p.return_from_sector?.has_issues).length}>
+            {waiting.filter(p => !p.return_from_sector?.has_issues).length === 0 ? (
+              <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma aguardando</div>
+            ) : waiting.filter(p => !p.return_from_sector?.has_issues).map(po => (
+              <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />
+            ))}
+          </KanbanColumn>
+          <KanbanColumn title="Em Produção" colorClass="bg-blue-500" count={inProgress.length}>
+            {inProgress.length === 0 ? (
+              <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma em produção</div>
+            ) : inProgress.map(po => (
+              <OrderCard key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />
+            ))}
+          </KanbanColumn>
+          <KanbanColumn title="Concluído" colorClass="bg-emerald-500" count={doneAll.length}>
+            {doneAll.length === 0 ? (
+              <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhuma concluída</div>
+            ) : doneAll.map(po => <GhostCard key={po.id} po={po} onDetail={setDetailPO} />)}
+          </KanbanColumn>
+        </div>
+      ) : (
+        /* ── DEMAIS SETORES: por pedido (3 colunas) ── */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-red-500" />
+              <span className="font-semibold text-sm">Retornos</span>
+              <Badge variant="secondary" className="text-xs ml-auto">{returns.length}</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {returns.length === 0 ? (
+                <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum retorno</div>
+              ) : returns.map(po => (
+                <div key={po.id} className="bg-card rounded-xl border border-red-200 p-3">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-bold">{po.unique_number}</span>
+                    <Badge className="text-[10px] bg-red-100 text-red-700 border-red-200">⚠ Retorno</Badge>
+                  </div>
+                  <p className="font-semibold text-sm">{po.product_name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Ped. #{po.order_number}</p>
+                  {po.return_from_sector?.issue_quantity > 0 && (
+                    <p className="text-xs text-red-600 font-medium mt-1">Qtd com problemas: <strong>{po.return_from_sector.issue_quantity}</strong>/{po.quantity}</p>
+                  )}
+                  <Button size="sm" className="mt-2.5 w-full gap-1 bg-red-600 hover:bg-red-700 text-xs" onClick={() => handleStartClick(po)}>
+                    <AlertTriangle className="w-3 h-3" /> Corrigir
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-blue-500" />
+              <span className="font-semibold text-sm">Pedidos Ativos</span>
+              <Badge variant="secondary" className="text-xs ml-auto">{activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).length}</Badge>
+            </div>
+            <div className="space-y-3">
+              {activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).length === 0 ? (
+                <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum pedido ativo</div>
+              ) : activeGroups.filter(g => !g.pos.some(p => p.return_from_sector?.has_issues)).map(g => {
+                const order = allOrders.find(o => o.id === g.orderId);
+                return (
+                  <div key={g.orderId || g.orderNumber} className="bg-card rounded-xl border border-border/60 overflow-hidden hover:shadow-md">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex-1 min-w-0">
+                        <Link to={`/pedidos/${g.orderId}`} className="font-bold text-sm hover:text-primary flex items-center gap-1">
+                          Pedido #{g.orderNumber} <ExternalLink className="w-3 h-3 opacity-50" />
+                        </Link>
+                        {g.deliveryDeadline && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Prazo: {format(new Date(g.deliveryDeadline), "dd/MM/yy")}
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant="secondary" className="text-xs">{g.pos.length} OPs</Badge>
+                    </div>
+                    <div className="px-3 pb-3 space-y-1.5">
+                      {g.pos.map(po => (
+                        <PORow key={po.id} po={po} onStart={handleStartClick} onComplete={setCompleting} onDetail={setDetailPO} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div>
             <div className="flex items-center gap-2 mb-3 px-1 sticky top-0 bg-background py-1 z-10">
               <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-500" />
@@ -967,18 +926,11 @@ export default function SectorView() {
               <Badge variant="secondary" className="text-xs ml-auto">{doneGroups.length}</Badge>
             </div>
             <div className="space-y-2.5">
-              {doneGroups.length === 0
-                ? <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum concluído</div>
-                : doneGroups.map(g => (
-                    <GhostGroupCard
-                      key={g.orderId || g.orderNumber}
-                      orderNumber={g.orderNumber}
-                      orderId={g.orderId}
-                      pos={g.pos}
-                      onDetail={setDetailPO}
-                    />
-                  ))
-              }
+              {doneGroups.length === 0 ? (
+                <div className="bg-muted/40 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nenhum concluído</div>
+              ) : doneGroups.map(g => (
+                <GhostGroupCard key={g.orderId || g.orderNumber} {...g} onDetail={setDetailPO} />
+              ))}
             </div>
           </div>
         </div>
@@ -998,39 +950,17 @@ export default function SectorView() {
       <ReturnIssueDialog
         open={!!returnIssueDialog}
         po={returnIssueDialog}
-        onClose={() => {
-          setReturnIssueDialog(null);
-          setReturnData(null);
-        }}
+        onClose={() => { setReturnIssueDialog(null); setReturnData(null); }}
         onContinue={(data) => {
           setReturnData(data);
           if (data.has_issues) {
             notify(
               `Problemas Identificados no Retorno — ${returnIssueDialog.product_name}`,
               "return_issue",
-              {
-                unique_number: returnIssueDialog.unique_number,
-                product_name: returnIssueDialog.product_name,
-                issue_quantity: data.issue_quantity,
-              }
+              { unique_number: returnIssueDialog.unique_number, product_name: returnIssueDialog.product_name, issue_quantity: data.issue_quantity }
             );
           }
-          if (returnIssueDialog && ((returnIssueDialog.current_step_index || 0) === 0 || stockItems.length === 0)) {
-            startMutation.mutate(returnIssueDialog);
-          } else if (returnIssueDialog) {
-            setStartingPO(returnIssueDialog);
-            const product = returnIssueDialog.product_id;
-            if (product && stockItems.length > 0) {
-              const components = []; // Stock check would go here if needed
-              if (components.length === 0) {
-                startMutation.mutate(returnIssueDialog);
-              } else {
-                setStockAlert({ po: returnIssueDialog, deductions: components });
-              }
-            } else {
-              startMutation.mutate(returnIssueDialog);
-            }
-          }
+          startMutation.mutate(returnIssueDialog);
         }}
         loading={startMutation.isPending}
       />
@@ -1053,10 +983,23 @@ export default function SectorView() {
                   <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
                     <Clock className="w-3 h-3" />
                     Duração: {formatDistanceStrict(new Date(completing.sector_started_at), new Date(), { locale: ptBR })}
-                    {" · "}Início: {format(new Date(completing.sector_started_at), "HH:mm 'de' dd/MM")}
                   </p>
                 )}
-                {(() => {
+                {/* Next sector info */}
+                {isEmbalagem ? (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    Destino automático:
+                    <strong className="text-foreground">
+                      {completing.purchase_location && LOCATION_TO_MESA[completing.purchase_location]
+                        ? SECTOR_LABELS[LOCATION_TO_MESA[completing.purchase_location]]
+                        : "Agendamento"}
+                    </strong>
+                  </p>
+                ) : isMesa ? (
+                  <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Próximo: Agendamento
+                  </p>
+                ) : (() => {
                   const nextIdx = (completing.current_step_index || 0) + 1;
                   const seq = completing.production_sequence || [];
                   const next = seq[nextIdx];
@@ -1080,15 +1023,76 @@ export default function SectorView() {
                 />
               </div>
 
-              <div>
-                <Label className="text-xs">Avaliação da qualidade</Label>
-                <div className="mt-1.5">
-                  <StarRating value={completionForm.rating} onChange={v => setCompletionForm(p => ({ ...p, rating: v }))} />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {["", "Ruim", "Regular", "Bom", "Muito Bom", "Excelente"][completionForm.rating] || "Selecione"}
+              {/* Embalagem: QC Checklist */}
+              {isEmbalagem && (
+                <div className="space-y-3 border rounded-xl p-3 bg-muted/30">
+                  <p className="text-xs font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-primary" /> Checklist de Qualidade
                   </p>
+                  {QC_CHECK_ITEMS.map(item => (
+                    <div key={item.key} className="flex items-center justify-between">
+                      <span className="text-xs">{item.label}</span>
+                      <div className="flex gap-1">
+                        {["aprovado", "reprovado", "na"].map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setQcForm(p => ({ ...p, [item.key]: val }))}
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-medium transition-all",
+                              qcForm[item.key] === val
+                                ? val === "aprovado" ? "bg-emerald-500 text-white" : val === "reprovado" ? "bg-red-500 text-white" : "bg-gray-400 text-white"
+                                : "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            {val === "na" ? "N/A" : val === "aprovado" ? "OK" : "NOK"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div>
+                    <Label className="text-xs">Resultado Final</Label>
+                    <Select value={qcForm.overall_result} onValueChange={v => setQcForm(p => ({ ...p, overall_result: v, correction_sector: "" }))}>
+                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="aprovado">✅ Aprovado</SelectItem>
+                        <SelectItem value="retrabalho">🔁 Retrabalho</SelectItem>
+                        <SelectItem value="reprovado">❌ Reprovado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {qcNeedsCorrection && (
+                    <div>
+                      <Label className="text-xs flex items-center gap-1 text-amber-700"><AlertTriangle className="w-3 h-3" /> Setor de Correção *</Label>
+                      <Select value={qcForm.correction_sector} onValueChange={v => setQcForm(p => ({ ...p, correction_sector: v }))}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                          {SECTORS.filter(s => !["embalagem", "controle_qualidade", "agendamento", "expedicao"].includes(s.id)).map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {!qcNeedsCorrection && (
+                    <div>
+                      <Label className="text-xs flex items-center gap-1"><Truck className="w-3 h-3" /> Destino após aprovação</Label>
+                      <Select value={embalagemDest} onValueChange={setEmbalagemDest}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">Automático (pela localização da compra)</SelectItem>
+                          <SelectItem value="agendamento">Agendamento</SelectItem>
+                          <SelectItem value="expedicao">Expedição direta</SelectItem>
+                          {PURCHASE_LOCATIONS.map(loc => (
+                            <SelectItem key={loc.mesa} value={loc.mesa}>{SECTOR_LABELS[loc.mesa]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
               <div>
                 <Label className="text-xs flex items-center gap-1">
@@ -1117,8 +1121,8 @@ export default function SectorView() {
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="outline" onClick={() => setCompleting(null)}>Cancelar</Button>
                 <Button
-                  onClick={() => completeMutation.mutate({ po: completing, ...completionForm })}
-                  disabled={completeMutation.isPending}
+                  onClick={() => completeMutation.mutate({ po: completing, ...completionForm, destOverride: embalagemDest, qc: isEmbalagem ? qcForm : null })}
+                  disabled={completeMutation.isPending || (isEmbalagem && qcNeedsCorrection && !qcForm.correction_sector)}
                   className="gap-1 bg-emerald-600 hover:bg-emerald-700"
                 >
                   <CheckCircle2 className="w-4 h-4" />

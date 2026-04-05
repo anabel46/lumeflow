@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Info } from "lucide-react";
+import { Info, MapPin } from "lucide-react";
+import { PURCHASE_LOCATIONS } from "@/lib/constants";
 
 const DEFAULT_DELIVERY_DAYS = 20;
 
@@ -20,6 +21,7 @@ export default function OrderForm({ open, onClose, onSubmit, initialData }) {
     request_date: today,
     delivery_deadline: defaultDeadline,
     delivery_type: "normal",
+    purchase_location: "",
     cost_center: "",
     environment: "",
     status: "aprovacao_pendente",
@@ -104,6 +106,19 @@ export default function OrderForm({ open, onClose, onSubmit, initialData }) {
               <Label>Centro de Custo</Label>
               <Input value={form.cost_center} onChange={(e) => update("cost_center", e.target.value)} className="mt-1" />
             </div>
+          </div>
+
+          <div>
+            <Label className="flex items-center gap-1"><MapPin className="w-3 h-3" /> Localização da Compra <span className="text-muted-foreground font-normal text-xs">(loja/unidade)</span></Label>
+            <Select value={form.purchase_location || ""} onValueChange={(v) => update("purchase_location", v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a loja..." /></SelectTrigger>
+              <SelectContent>
+                {PURCHASE_LOCATIONS.map(loc => (
+                  <SelectItem key={loc.id} value={loc.id}>{loc.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Determina a mesa de destino após embalagem</p>
           </div>
 
           <div>

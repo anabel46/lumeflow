@@ -1,0 +1,87 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "order_number": {
+      "type": "string",
+      "description": "N\u00famero do pedido"
+    },
+    "client_name": {
+      "type": "string",
+      "description": "Nome do cliente"
+    },
+    "request_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data de solicita\u00e7\u00e3o do pedido"
+    },
+    "delivery_deadline": {
+      "type": "string",
+      "format": "date",
+      "description": "Prazo de entrega"
+    },
+    "delivery_type": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "posterior"
+      ],
+      "default": "normal",
+      "description": "Tipo de entrega: normal (20 dias) ou fabrica\u00e7\u00e3o posterior (cliente define prazo)"
+    },
+    "purchase_location": {
+      "type": "string",
+      "enum": [
+        "barra",
+        "ipanema",
+        "sao_gabriel",
+        "vila_madalena",
+        "fabrica"
+      ],
+      "description": "Localiza\u00e7\u00e3o da compra (loja/unidade onde o pedido foi realizado)"
+    },
+    "cost_center": {
+      "type": "string",
+      "description": "Centro de custo"
+    },
+    "environment": {
+      "type": "string",
+      "description": "Ambiente da casa (sala, quarto, etc.) - informado pelo comercial"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "aprovacao_pendente",
+        "confirmado",
+        "aguardando",
+        "em_producao",
+        "finalizado",
+        "cancelado"
+      ],
+      "default": "aprovacao_pendente",
+      "description": "Status do pedido. aprovacao_pendente = aguardando libera\u00e7\u00e3o do gerente. confirmado = liberado para produ\u00e7\u00e3o."
+    },
+    "approved_by": {
+      "type": "string",
+      "description": "Nome do gerente que aprovou"
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Data/hora da aprova\u00e7\u00e3o"
+    },
+    "observations": {
+      "type": "string",
+      "description": "Informa\u00e7\u00f5es complementares do pedido"
+    },
+    "sankhya_id": {
+      "type": "string",
+      "description": "ID de integra\u00e7\u00e3o com Sankhya"
+    }
+  },
+  "required": [
+    "order_number",
+    "client_name",
+    "request_date"
+  ]
+}
