@@ -114,6 +114,16 @@
       ],
       "default": "planejamento"
     },
+    "agendamento_status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "agendado",
+        "em_entrega",
+        "entregue"
+      ],
+      "description": "Status no agendamento"
+    },
     "expedicao_status": {
       "type": "string",
       "enum": [
