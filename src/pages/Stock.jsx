@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Warehouse, ArrowDownUp, AlertTriangle, Package, Pencil } from "lucide-react";
+import { Plus, Search, Warehouse, ArrowDownUp, AlertTriangle, Package, Pencil, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
@@ -28,6 +29,17 @@ export default function Stock() {
     queryKey: ["stock-requests"],
     queryFn: () => base44.entities.StockRequest.list("-created_date", 200),
   });
+
+  const { data: reservations = [] } = useQuery({
+    queryKey: ["stock-reservations"],
+    queryFn: () => base44.entities.StockReservation.filter({ status: "ativa" }),
+  });
+
+  // Mapa de reservas por stock_item_id
+  const reservedMap = reservations.reduce((acc, r) => {
+    acc[r.stock_item_id] = (acc[r.stock_item_id] || 0) + (r.quantity_reserved || 0);
+    return acc;
+  }, {});
 
   const [itemForm, setItemForm] = useState({ name: "", code: "", category: "", unit: "un", quantity_factory: 0, quantity_upper: 0, minimum_stock: 0 });
   const [reqForm, setReqForm] = useState({ stock_item_id: "", item_name: "", quantity_requested: 1, from_stock: "fabril", sector: "", observations: "" });
@@ -59,7 +71,11 @@ export default function Stock() {
     setShowItemForm(true);
   };
 
-  const lowStock = items.filter(i => (i.quantity_factory + i.quantity_upper) < i.minimum_stock);
+  const lowStock = items.filter(i => {
+    const reserved = reservedMap[i.id] || 0;
+    const available = (i.quantity_factory || 0) - reserved;
+    return available < (i.minimum_stock || 0);
+  });
   const filteredItems = items.filter(i => i.name?.toLowerCase().includes(search.toLowerCase()) || i.code?.toLowerCase().includes(search.toLowerCase()));
 
   const statusColors = { pendente: "bg-yellow-100 text-yellow-800", aprovado: "bg-blue-100 text-blue-800", rejeitado: "bg-red-100 text-red-800", entregue: "bg-emerald-100 text-emerald-800" };
@@ -92,6 +108,7 @@ export default function Stock() {
         <TabsList>
           <TabsTrigger value="items">Itens ({items.length})</TabsTrigger>
           <TabsTrigger value="requests">Solicitações ({requests.filter(r => r.status === "pendente").length} pendentes)</TabsTrigger>
+          <TabsTrigger value="reservations">Reservas ({reservations.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="items" className="space-y-4">
@@ -109,22 +126,40 @@ export default function Stock() {
                     <th className="text-left p-4 font-medium text-muted-foreground">Nome</th>
                     <th className="text-left p-4 font-medium text-muted-foreground">Unid.</th>
                     <th className="text-center p-4 font-medium text-muted-foreground">Est. Fabril</th>
-                    <th className="text-center p-4 font-medium text-muted-foreground">Est. Superior</th>
+                    <th className="text-center p-4 font-medium text-muted-foreground">Reservado</th>
+                    <th className="text-center p-4 font-medium text-muted-foreground">Disponível</th>
                     <th className="text-center p-4 font-medium text-muted-foreground">Mínimo</th>
                     <th className="text-left p-4 font-medium text-muted-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredItems.map((item) => {
-                    const total = (item.quantity_factory || 0) + (item.quantity_upper || 0);
-                    const isLow = total < (item.minimum_stock || 0);
+                    const reserved = reservedMap[item.id] || 0;
+                    const available = (item.quantity_factory || 0) - reserved;
+                    const isLow = available < (item.minimum_stock || 0);
+                    const isInsufficient = available < 0;
                     return (
-                      <tr key={item.id} className={cn("border-b hover:bg-muted/30 transition-colors", isLow && "bg-red-50/50")}>
+                      <tr key={item.id} className={cn("border-b hover:bg-muted/30 transition-colors", isInsufficient ? "bg-red-50/70" : isLow && "bg-amber-50/50")}>
                         <td className="p-4 font-mono text-xs">{item.code}</td>
-                        <td className="p-4 font-medium">{item.name}</td>
+                        <td className="p-4 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            {item.name}
+                            {isInsufficient && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
+                            {isLow && !isInsufficient && <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
+                          </div>
+                        </td>
                         <td className="p-4">{item.unit}</td>
                         <td className="p-4 text-center font-semibold">{item.quantity_factory}</td>
-                        <td className="p-4 text-center font-semibold">{item.quantity_upper}</td>
+                        <td className="p-4 text-center">
+                          {reserved > 0 ? (
+                            <span className="flex items-center justify-center gap-1 text-orange-600 font-semibold">
+                              <Lock className="w-3 h-3" />{reserved}
+                            </span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className={cn("p-4 text-center font-bold", isInsufficient ? "text-red-600" : isLow ? "text-amber-600" : "text-emerald-600")}>
+                          {available}
+                        </td>
                         <td className="p-4 text-center">{item.minimum_stock}</td>
                         <td className="p-4">
                           <Button variant="ghost" size="sm" onClick={() => openEditItem(item)}><Pencil className="w-3.5 h-3.5" /></Button>
@@ -159,6 +194,40 @@ export default function Stock() {
             </div>
           ))}
           {requests.length === 0 && <div className="bg-card rounded-2xl border p-8 text-center text-muted-foreground">Nenhuma solicitação</div>}
+        </TabsContent>
+
+        <TabsContent value="reservations" className="space-y-3">
+          <p className="text-sm text-muted-foreground">Reservas automáticas criadas ao confirmar pedidos.</p>
+          {reservations.length === 0 ? (
+            <div className="bg-card rounded-2xl border p-8 text-center text-muted-foreground">Nenhuma reserva ativa</div>
+          ) : (
+            <div className="bg-card rounded-2xl border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-4 font-medium text-muted-foreground">Item</th>
+                      <th className="text-left p-4 font-medium text-muted-foreground">Pedido</th>
+                      <th className="text-left p-4 font-medium text-muted-foreground">OP</th>
+                      <th className="text-center p-4 font-medium text-muted-foreground">Qtd Reservada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reservations.map(r => (
+                      <tr key={r.id} className="border-b hover:bg-muted/30">
+                        <td className="p-4 font-medium">{r.item_name} <span className="text-xs font-mono text-muted-foreground">{r.item_code}</span></td>
+                        <td className="p-4">#{r.order_number}</td>
+                        <td className="p-4 font-mono text-xs">{r.unique_number}</td>
+                        <td className="p-4 text-center font-semibold text-orange-600">
+                          <span className="flex items-center justify-center gap-1"><Lock className="w-3 h-3" />{r.quantity_reserved}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

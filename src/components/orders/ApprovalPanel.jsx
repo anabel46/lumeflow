@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, SECTOR_LABELS } from "@/lib/constants";
+import StockReservationAlert from "@/components/stock/StockReservationAlert";
 
 function ItemDetailCard({ po, products }) {
   const product = products.find(p => p.id === po.product_id);
@@ -149,15 +150,48 @@ export default function ApprovalPanel({ order, productionOrders, orderId }) {
   const systemUser = systemUsers.find(u => u.email === currentUser?.email || u.name === currentUser?.full_name);
   const isManager = systemUser?.role === "admin" || systemUser?.role === "gerente" || currentUser?.role === "admin";
 
+  const { data: stockItems = [] } = useQuery({
+    queryKey: ["stock-items"],
+    queryFn: () => base44.entities.StockItem.list("name", 500),
+  });
+
   const approveMutation = useMutation({
-    mutationFn: () => base44.entities.Order.update(orderId, {
-      status: "confirmado",
-      approved_by: managerName || currentUser?.full_name || "Gerente",
-      approved_at: new Date().toISOString(),
-    }),
+    mutationFn: async () => {
+      // 1. Confirmar pedido
+      await base44.entities.Order.update(orderId, {
+        status: "confirmado",
+        approved_by: managerName || currentUser?.full_name || "Gerente",
+        approved_at: new Date().toISOString(),
+      });
+
+      // 2. Criar reservas de estoque para cada componente das OPs
+      for (const po of productionOrders) {
+        const product = products.find(p => p.id === po.product_id);
+        const components = product?.components || [];
+        for (const comp of components) {
+          const stockItem = stockItems.find(
+            s => s.code === comp.reference || s.name?.toLowerCase() === comp.name?.toLowerCase()
+          );
+          if (!stockItem) continue;
+          const needed = (comp.quantity_per_unit || 1) * (po.quantity || 1);
+          await base44.entities.StockReservation.create({
+            order_id: orderId,
+            order_number: order.order_number,
+            production_order_id: po.id,
+            unique_number: po.unique_number,
+            stock_item_id: stockItem.id,
+            item_name: stockItem.name,
+            item_code: stockItem.code,
+            quantity_reserved: needed,
+            status: "ativa",
+          });
+        }
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-reservations"] });
       setShowDialog(false);
     },
   });
@@ -225,6 +259,10 @@ export default function ApprovalPanel({ order, productionOrders, orderId }) {
               </>
             )}
           </div>
+        )}
+
+        {isManager && (
+          <StockReservationAlert productionOrders={productionOrders} />
         )}
 
         {isManager && (

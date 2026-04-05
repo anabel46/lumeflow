@@ -539,8 +539,18 @@ export default function SectorView() {
         reason: `Produção iniciada — OP ${startingPO.unique_number}`,
         production_order_id: startingPO.id, unique_number: startingPO.unique_number,
       });
+      // Marcar reserva como consumida
+      const reservations = await base44.entities.StockReservation.filter({
+        production_order_id: startingPO.id,
+        stock_item_id: d.stockItemId,
+        status: "ativa",
+      });
+      for (const res of reservations) {
+        await base44.entities.StockReservation.update(res.id, { status: "consumida" });
+      }
     }
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
+    queryClient.invalidateQueries({ queryKey: ["stock-reservations"] });
     setStockAlert(null);
     startMutation.mutate(startingPO);
     setStartingPO(null);

@@ -1,0 +1,50 @@
+{
+  "name": "StockReservation",
+  "type": "object",
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "description": "ID do pedido"
+    },
+    "order_number": {
+      "type": "string",
+      "description": "N\u00famero do pedido"
+    },
+    "production_order_id": {
+      "type": "string",
+      "description": "ID da OP"
+    },
+    "unique_number": {
+      "type": "string",
+      "description": "N\u00famero \u00fanico da OP"
+    },
+    "stock_item_id": {
+      "type": "string",
+      "description": "ID do item de estoque"
+    },
+    "item_name": {
+      "type": "string"
+    },
+    "item_code": {
+      "type": "string"
+    },
+    "quantity_reserved": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ativa",
+        "consumida",
+        "cancelada"
+      ],
+      "default": "ativa"
+    }
+  },
+  "required": [
+    "order_id",
+    "stock_item_id",
+    "item_name",
+    "quantity_reserved"
+  ]
+}
