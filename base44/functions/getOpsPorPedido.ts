@@ -1,29 +1,30 @@
-// base44/functions/getOpsPorPedido.ts - VERSÃO CORRIGIDA
+// base44/functions/_shared/sankhyaQuery.js
 
-import { buscarProcessosPorPedido, OpDTO } from "./_shared/sankhyaQuery.ts";
+// 1. Em JS, não usamos interfaces ou tipos (ServiceContext, etc.)
+// 2. Certifique-se de que os imports internos também usem .js se forem arquivos locais
 
-Deno.serve(async (req) => {
+export async function buscarProcessosPorPedido(pedidoId) {
   try {
-    const url = new URL(req.url);
-    const numeroPedido = url.searchParams.get("pedido");
+    // Exemplo de uma chamada típica de banco ou API no Deno
+    // Se estiver usando algum cliente específico, a lógica de tipos é removida
+    const sql = `SELECT * FROM TSIPRO WHERE PEDIDO = ${pedidoId}`;
+    
+    // Supondo que você use um fetch ou um client de banco:
+    const resultado = await fetch("URL_SANKHYA", {
+       method: "POST",
+       body: JSON.stringify({ query: sql })
+    });
 
-    const dadosBrutos = await buscarProcessosPorPedido();
-
-    // Se passar ?pedido=123, filtra apenas esse pedido
-    if (numeroPedido) {
-      const pedidoEspecifico = dadosBrutos[numeroPedido];
-      if (!pedidoEspecifico) {
-        return Response.json({ erro: "Pedido não encontrado" }, { status: 404 });
-      }
-      return Response.json({ [numeroPedido]: pedidoEspecifico });
+    if (!resultado.ok) {
+      throw new Error("Erro na resposta do servidor Sankhya");
     }
 
-    // Senão retorna todos
-    return Response.json(dadosBrutos);
-    
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("Erro em getOpsPorPedido:", msg);
-    return Response.json({ erro: msg }, { status: 500 });
+    return await resultado.json();
+
+  } catch (error) {
+    // Mantendo o padrão de erro amigável que usamos no outro arquivo
+    const msg = error.message || String(error);
+    console.error("Erro em buscarProcessosPorPedido:", msg);
+    throw new Error(msg);
   }
-});
+}
