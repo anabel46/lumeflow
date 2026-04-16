@@ -1,0 +1,5 @@
+{
+  "name": "api-dim-lux",
+  "description": "Integracao Sankhya — Gestao de Producao (migrado de Spring Boot para Deno/TypeScript)",
+  "functionsDir": "./functions"
+}

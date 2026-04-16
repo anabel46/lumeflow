@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@tanstack/react-query": "npm:@tanstack/react-query@^5.99.0",
+    "react": "npm:react@^19.2.5"
+  }
+}
