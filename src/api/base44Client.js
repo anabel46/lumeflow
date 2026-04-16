@@ -1,16 +1,20 @@
 import { createClient } from '@base44/sdk';
-import { appParams } from '../lib/app-params.js'; // Garanta o .js aqui também
+import { appParams } from '../lib/app-params.js'; 
 
 const { appId, token, functionsVersion, appBaseUrl } = appParams;
 
-// Log para você conferir se o token está sendo lido (olhe no Console do navegador)
-console.log("AppId:", appId, "Token presente:", !!token);
-
 export const base44 = createClient({
   appId,
-  token, // Este valor precisa estar configurado no painel do Base44
+  token, 
   functionsVersion,
   serverUrl: '', 
-  requiresAuth: true, // Mude para true para enviar o Header de autorização
-  appBaseUrl
+  requiresAuth: true, // Garante que o Base44 envie o cabeçalho de autorização
+  appBaseUrl,
+  // Colocando os parâmetros direto no código para teste imediato
+  headers: {
+    'client_id': 'c7aded48-eee0-4187-8ee1-26fa40b0f52b',
+    'client_secret': '0z8eDmAr8iTxZcaRl3DasbQaBiSetV3W',
+    'X-Token': '0ec8c781-945f-4702-99d8-c634ae6fcf76',
+    'Content-Type': 'application/json'
+  }
 });
