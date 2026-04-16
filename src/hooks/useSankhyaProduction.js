@@ -1,6 +1,5 @@
 // src/hooks/useSankhyaProduction.js
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-// Adicione o .js no final para o ambiente Deno do Base44 reconhecer
+import { useQuery, useMutation, useQueryClient } from 'https://esm.sh/@tanstack/react-query';// Adicione o .js no final para o ambiente Deno do Base44 reconhecer
 import { base44 as api } from '../api/base44Client.js';
 /**
  * HOOK DE BUSCA (READ)
