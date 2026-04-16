@@ -2,13 +2,11 @@
   "name": "api-dim-lux",
   "functionsDir": "./functions",
   "functions": [
-    {
-      "name": "getDashboard",
-      "entrypoint": "getDashboard.ts" // O Base44 buscará este arquivo dentro da functionsDir
-    },
-    {
-      "name": "getSankhyaOps", 
-      "entrypoint": "getSankhyaOps.ts"
-    }
+    { "name": "getDashboard", "entrypoint": "getDashboard.js" },
+    { "name": "getAtualizarStatus", "entrypoint": "getAtualizarStatus.js" },
+    { "name": "getOp", "entrypoint": "getOp.js" },
+    { "name": "getOpsFormatadas", "entrypoint": "getOpsFormatadas.js" },
+    { "name": "getOpsPorPedido", "entrypoint": "getOpsPorPedido.js" },
+    { "name": "getSankhyaOps", "entrypoint": "getSankhyaOps.js" }
   ]
 }
