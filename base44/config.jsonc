@@ -1,20 +1,5 @@
 {
   "name": "api-dim-lux",
   "description": "Integracao Sankhya — Gestao de Producao (migrado de Spring Boot para Deno/TypeScript)",
-  "functionsDir": "./functions",
-  "functions": [
-    {
-      "name": "getDashboard",
-      "entrypoint": "getDashboard.ts"
-    },
-    {
-      "name": "getSankhyaOps",
-      "entrypoint": "getSankhyaOps.ts"
-    },
-    {
-      "name": "getAtualizarStatus",
-      "entrypoint": "getAtualizarStatus.ts"
-    }
-    // Adicione os outros arquivos (.ts) que você tem na pasta functions aqui
-  ]
+  "functionsDir": "./functions"
 }
