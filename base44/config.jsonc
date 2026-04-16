@@ -1,5 +1,14 @@
 {
   "name": "api-dim-lux",
-  "description": "Integracao Sankhya — Gestao de Producao (migrado de Spring Boot para Deno/TypeScript)",
-  "functionsDir": "./functions"
+  "functionsDir": "./functions",
+  "functions": [
+    {
+      "name": "getDashboard",
+      "entrypoint": "getDashboard.ts" // O Base44 buscará este arquivo dentro da functionsDir
+    },
+    {
+      "name": "getSankhyaOps", 
+      "entrypoint": "getSankhyaOps.ts"
+    }
+  ]
 }
