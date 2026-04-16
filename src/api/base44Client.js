@@ -8,9 +8,8 @@ export const base44 = createClient({
   token, 
   functionsVersion,
   serverUrl: '', 
-  requiresAuth: true, // Garante que o Base44 envie o cabeçalho de autorização
+  requiresAuth: true, // OBRIGATÓRIO: ativa o crachá de acesso
   appBaseUrl,
-  // Colocando os parâmetros direto no código para teste imediato
   headers: {
     'client_id': 'c7aded48-eee0-4187-8ee1-26fa40b0f52b',
     'client_secret': '0z8eDmAr8iTxZcaRl3DasbQaBiSetV3W',
