@@ -1,20 +1,26 @@
-// _shared/tokenManager.ts
+// _shared/tokenManager.js
 const MARGIN_MS = 60_000;
-let cachedToken: string | null = null;
+let cachedToken = null;
 let expiresAt = 0;
 
-export async function getValidToken(): Promise<string> {
-  if (cachedToken && Date.now() < expiresAt - MARGIN_MS) return cachedToken;
+/**
+ * Retorna um token válido, usando o cache se ainda não expirou.
+ */
+export async function getValidToken() {
+  if (cachedToken && Date.now() < expiresAt - MARGIN_MS) {
+    return cachedToken;
+  }
   return refreshToken();
 }
 
-// _shared/tokenManager.ts - ADICIONAR LOGS
-
-export async function refreshToken(): Promise<string> {
-  const oauthUrl     = Deno.env.get("SANKHYA_OAUTH_URL");
-  const clientId     = Deno.env.get("SANKHYA_CLIENT_ID");
+/**
+ * Realiza a autenticação OAuth2 no Sankhya para obter um novo token.
+ */
+export async function refreshToken() {
+  const oauthUrl = Deno.env.get("SANKHYA_OAUTH_URL");
+  const clientId = Deno.env.get("SANKHYA_CLIENT_ID");
   const clientSecret = Deno.env.get("SANKHYA_CLIENT_SECRET");
-  const xToken       = Deno.env.get("SANKHYA_X_TOKEN");
+  const xToken = Deno.env.get("SANKHYA_X_TOKEN");
 
   console.log("🔐 Tentando autenticar no Sankhya...");
   console.log("URL:", oauthUrl);
@@ -26,16 +32,16 @@ export async function refreshToken(): Promise<string> {
   }
 
   const body = new URLSearchParams({
-    grant_type:    "client_credentials",
-    client_id:     clientId,
+    grant_type: "client_credentials",
+    client_id: clientId,
     client_secret: clientSecret,
   });
 
   const res = await fetch(oauthUrl, {
-    method:  "POST",
+    method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "X-Token":      xToken,
+      "X-Token": xToken,
     },
     body: body.toString(),
   });
@@ -48,33 +54,44 @@ export async function refreshToken(): Promise<string> {
     throw new Error(`Auth Sankhya falhou (${res.status}): ${text}`);
   }
 
-  const data = await res.json() as { access_token: string; expires_in: number };
+  const data = await res.json();
   
   console.log("✅ Token obtido! Expira em:", data.expires_in, "segundos");
   console.log("Token (primeiros 20 chars):", data.access_token?.substring(0, 20) + "...");
   
   cachedToken = data.access_token;
-  expiresAt   = Date.now() + data.expires_in * 1000;
+  // Converte expires_in (segundos) para timestamp ms
+  expiresAt = Date.now() + data.expires_in * 1000;
   
   return cachedToken;
 }
 
-export async function fetchSankhya(url: string, options: RequestInit): Promise<Response> {
+/**
+ * Wrapper do fetch que injeta automaticamente o token Bearer e trata erro 401.
+ */
+export async function fetchSankhya(url, options = {}) {
   const token = await getValidToken();
 
-  const makeHeaders = (t: string): Record<string, string> => ({
-    ...(options.headers as Record<string, string> ?? {}),
+  const makeHeaders = (t) => ({
+    ...(options.headers || {}),
     "Authorization": `Bearer ${t}`,
-    "Content-Type":  "application/json",
+    "Content-Type": "application/json",
   });
 
-  const res = await fetch(url, { ...options, headers: makeHeaders(token) });
+  let res = await fetch(url, { 
+    ...options, 
+    headers: makeHeaders(token) 
+  });
 
+  // Se o token estiver expirado no servidor (401), tenta renovar uma vez
   if (res.status === 401) {
     console.log("401 recebido — renovando token...");
     cachedToken = null;
     const fresh = await refreshToken();
-    return fetch(url, { ...options, headers: makeHeaders(fresh) });
+    res = await fetch(url, { 
+      ...options, 
+      headers: makeHeaders(fresh) 
+    });
   }
 
   return res;
