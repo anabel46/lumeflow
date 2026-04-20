@@ -1,17 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { getSankhyaOps, getOpsPorPedido, getDashboard } from "@/integrations/sankhya";
+import { base44 } from "@/api/base44Client";
 
 /**
- * Hook React para consumir dados da integração Sankhya.
+ * Hook React para consumir dados da integração Sankhya via backend function.
  *
  * Expõe:
  *   ops           - lista flat de OPs ativas
- *   opsPorPedido  - OPs agrupadas por pedido → idiproc
+ *   opsPorPedido  - OPs agrupadas por pedido
  *   dashboard     - totais/contagens
  *   loading       - boolean
  *   error         - string | null
- *   fetchOps()    - recarrega OPs manualmente
- *   fetchDashboard() - recarrega dashboard manualmente
+ *   refetch()     - recarrega dados manualmente
  */
 export function useSankhya() {
   const [ops, setOps] = useState([]);
@@ -20,31 +19,17 @@ export function useSankhya() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchOps = useCallback(async () => {
+  const refetch = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [flatOps, grouped] = await Promise.all([
-        getSankhyaOps(),
-        getOpsPorPedido(),
-      ]);
-      setOps(flatOps);
-      setOpsPorPedido(grouped);
+      const response = await base44.functions.invoke("getDashboard", {});
+      const { ops: flatOps, opsPorPedido: grouped, dashboard: dash } = response.data;
+      setOps(flatOps || []);
+      setOpsPorPedido(grouped || {});
+      setDashboard(dash || null);
     } catch (err) {
-      setError(err.message || "Erro ao buscar OPs do Sankhya");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchDashboard = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getDashboard();
-      setDashboard(data);
-    } catch (err) {
-      setError(err.message || "Erro ao buscar dashboard do Sankhya");
+      setError(err.message || "Erro ao buscar dados do Sankhya");
     } finally {
       setLoading(false);
     }
@@ -52,27 +37,8 @@ export function useSankhya() {
 
   // Auto-fetch ao montar
   useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [flatOps, grouped, dash] = await Promise.all([
-          getSankhyaOps(),
-          getOpsPorPedido(),
-          getDashboard(),
-        ]);
-        setOps(flatOps);
-        setOpsPorPedido(grouped);
-        setDashboard(dash);
-      } catch (err) {
-        setError(err.message || "Erro ao inicializar dados do Sankhya");
-      } finally {
-        setLoading(false);
-      }
-    };
+    refetch();
+  }, [refetch]);
 
-    init();
-  }, []);
-
-  return { ops, opsPorPedido, dashboard, loading, error, fetchOps, fetchDashboard };
+  return { ops, opsPorPedido, dashboard, loading, error, refetch };
 }

@@ -26,12 +26,7 @@ const SITUACAO_BADGE = {
 };
 
 export default function SankhyaSection() {
-  const { ops, dashboard, loading, error, fetchOps, fetchDashboard } = useSankhya();
-
-  const handleRefresh = () => {
-    fetchOps();
-    fetchDashboard();
-  };
+  const { ops, dashboard, loading, error, refetch } = useSankhya();
 
   return (
     <div className="space-y-4">
@@ -44,7 +39,7 @@ export default function SankhyaSection() {
         <Button
           variant="outline"
           size="sm"
-          onClick={handleRefresh}
+          onClick={refetch}
           disabled={loading}
           className="gap-1.5"
         >
