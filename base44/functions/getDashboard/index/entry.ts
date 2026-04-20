@@ -92,7 +92,6 @@ async function executarSQL(sql) {
   });
 }
 
-// ─── Handler ────────────────────────────────────────────────────────────────────
 // deno-lint-ignore no-undef
 Deno.serve(async (req) => {
   try {

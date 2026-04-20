@@ -15,7 +15,6 @@ import OEEIndicator from "@/components/dashboard/OEEIndicator";
 import SectorAverageTime from "@/components/dashboard/SectorAverageTime";
 import TeamProductivity from "@/components/dashboard/TeamProductivity";
 import BottleneckAnalysis from "@/components/dashboard/BottleneckAnalysis";
-import SankhyaSection from "@/components/dashboard/SankhyaSection";
 
 export default function Dashboard() {
   const { data: productionOrders = [] } = useQuery({
@@ -91,10 +90,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Sankhya Integration */}
-      <div className="pt-4 border-t">
-        <SankhyaSection />
-      </div>
+
     </div>
   );
 }
