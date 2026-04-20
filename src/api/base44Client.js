@@ -11,9 +11,6 @@ export const base44 = createClient({
   requiresAuth: true, // OBRIGATÓRIO: ativa o crachá de acesso
   appBaseUrl,
   headers: {
-    'client_id': '',
-    'client_secret': '',
-    'X-Token': '',
-    'Content-Type': 'application/json'
+
   }
 });
