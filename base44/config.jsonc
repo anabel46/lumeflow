@@ -1,12 +1,4 @@
 {
-  "name": "api-dim-lux",
-  "functionsDir": "./functions",
-  "functions": [
-    { "name": "getDashboard", "entrypoint": "getDashboard.js" },
-    { "name": "getAtualizarStatus", "entrypoint": "getAtualizarStatus.js" },
-    { "name": "getOp", "entrypoint": "getOp.js" },
-    { "name": "getOpsFormatadas", "entrypoint": "getOpsFormatadas.js" },
-    { "name": "getOpsPorPedido", "entrypoint": "getOpsPorPedido.js" },
-    { "name": "getSankhyaOps", "entrypoint": "getSankhyaOps.js" }
-  ]
+  "id": "69c3f05282f50a44dad879d5",
+  "name": "lumeflow"
 }

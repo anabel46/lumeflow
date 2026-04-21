@@ -1,5 +1,5 @@
 {
-  "name": "Nota_Fiscal_RT",
+  "name": "NotaFiscalRT",
   "type": "object",
   "properties": {
     "numero_nf": {

@@ -1,5 +1,5 @@
 {
-  "name": "Pedido_RT",
+  "name": "PedidoRT",
   "type": "object",
   "properties": {
     "codigo_pedido": {
