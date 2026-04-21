@@ -173,8 +173,8 @@ export default function SankhyaOpsSection() {
     setLoading(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke("getDashboard", {});
-      setData(res.data);
+      const res = await base44.functions.invoke("getDashboard");
+      setData(res.data ?? res);
     } catch (err) {
       setError(err.message || "Erro ao buscar dados do Sankhya");
     } finally {
