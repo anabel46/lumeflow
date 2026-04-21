@@ -149,9 +149,10 @@ Deno.serve(async (req) => {
             });
             updatedCount++;
           } else {
-            // Insere novo
+            // Insere novo com campos obrigatórios
             await base44.asServiceRole.entities.ProductionOrder.create({
               unique_number: opData.numeroOp.toString(),
+              order_id: numPedido.toString(),
               order_number: numPedido.toString(),
               product_name: opData.produtos?.[0]?.descricao || "—",
               quantity: 1,
