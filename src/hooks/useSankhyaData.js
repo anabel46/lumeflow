@@ -21,7 +21,8 @@ export function useSankhyaData() {
     setError(null);
     try {
       const response = await base44.functions.invoke("getDashboard", {});
-      _cache = response.data;
+      // invoke retorna direto o objeto { estatisticas, pedidos }
+      _cache = response;
       _cacheTime = Date.now();
       setData(_cache);
     } catch (err) {
