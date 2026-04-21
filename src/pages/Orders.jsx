@@ -10,8 +10,12 @@ import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/constants";
 import OrderForm from "@/components/orders/OrderForm";
 import { Link } from "react-router-dom";
+import { useSankhyaData } from "@/hooks/useSankhyaData";
+import SankhyaOpBadge from "@/components/sankhya/SankhyaOpBadge";
 
 export default function Orders() {
+  const { getOpsByPedido, loading: sankhyaLoading } = useSankhyaData();
+
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [search, setSearch] = useState("");
@@ -80,9 +84,12 @@ export default function Orders() {
                     <td className="p-4">{order.request_date ? format(new Date(order.request_date), "dd/MM/yyyy") : "-"}</td>
                     <td className="p-4">{order.delivery_deadline ? format(new Date(order.delivery_deadline), "dd/MM/yyyy") : "-"}</td>
                     <td className="p-4">
-                      <Badge variant="outline" className={cn("text-xs", STATUS_COLORS[order.status])}>
-                        {STATUS_LABELS[order.status] || order.status}
-                      </Badge>
+                     <div className="flex flex-col gap-1">
+                       <Badge variant="outline" className={cn("text-xs w-fit", STATUS_COLORS[order.status])}>
+                         {STATUS_LABELS[order.status] || order.status}
+                       </Badge>
+                       <SankhyaOpBadge ops={getOpsByPedido(order.order_number)} loading={sankhyaLoading} />
+                     </div>
                     </td>
                     <td className="p-4">
                       <div className="flex gap-2">

@@ -15,6 +15,8 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, SECTOR_LABELS } from "@/lib/constants";
 import { Link } from "react-router-dom";
+import { useSankhyaData } from "@/hooks/useSankhyaData";
+import SankhyaOpBadge from "@/components/sankhya/SankhyaOpBadge";
 
 const STATUS_TABS = [
   { value: "all", label: "Todos" },
@@ -153,7 +155,7 @@ function PORow({ po, selected, onToggle, onStart, onPause, now }) {
   );
 }
 
-function OrderGroupCard({ group, selectedIds, onToggle, onStart, onPause, onSelectAll, now }) {
+function OrderGroupCard({ group, selectedIds, onToggle, onStart, onPause, onSelectAll, now, sankhyaOps = [], sankhyaLoading = false }) {
   const [expanded, setExpanded] = useState(true);
   const { order, pos } = group;
 
@@ -202,6 +204,7 @@ function OrderGroupCard({ group, selectedIds, onToggle, onStart, onPause, onSele
                   <AlertTriangle className="w-2 h-2" />Atrasado
                 </Badge>
               )}
+              <SankhyaOpBadge ops={sankhyaOps} loading={sankhyaLoading} />
             </div>
             <div className="flex flex-wrap gap-x-3 gap-y-0 text-[11px] text-muted-foreground mt-0.5">
               {order.cost_center && <span className="flex items-center gap-0.5"><Store className="w-2.5 h-2.5" />{order.cost_center}</span>}
@@ -266,6 +269,8 @@ function OrderGroupCard({ group, selectedIds, onToggle, onStart, onPause, onSele
 }
 
 export default function Production() {
+  const { getOpsByPedido, loading: sankhyaLoading } = useSankhyaData();
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
@@ -597,6 +602,8 @@ export default function Production() {
               onPause={pauseProduction}
               onSelectAll={handleSelectAll}
               now={now}
+              sankhyaOps={getOpsByPedido(group.order.order_number)}
+              sankhyaLoading={sankhyaLoading}
             />
           ))}
         </div>

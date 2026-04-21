@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useSankhyaDashboard } from "@/hooks/useSankhyaDashboard";
+import { useSankhyaData as useSankhyaDashboard } from "@/hooks/useSankhyaData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertCircle, Clock, Play, CheckCircle2, Activity, ChevronDown, ChevronRight } from "lucide-react";
