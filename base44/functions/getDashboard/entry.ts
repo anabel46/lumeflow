@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// ── Token Manager (inline) ──────────────────────────────────────────────────
+// ── Token Manager ────────────────────────────────────────────────────────────
 const MARGIN_MS = 60_000;
 let _cachedToken = null;
 let _expiresAt = 0;
@@ -11,52 +11,89 @@ async function getValidToken() {
 }
 
 async function refreshToken() {
-  const oauthUrl = Deno.env.get("SANKHYA_OAUTH_URL");
-  const clientId = Deno.env.get("SANKHYA_CLIENT_ID");
+  const oauthUrl     = Deno.env.get("SANKHYA_OAUTH_URL");
+  const clientId     = Deno.env.get("SANKHYA_CLIENT_ID");
   const clientSecret = Deno.env.get("SANKHYA_CLIENT_SECRET");
-  const xToken = Deno.env.get("SANKHYA_X_TOKEN");
+  const xToken       = Deno.env.get("SANKHYA_X_TOKEN");
 
   if (!oauthUrl || !clientId || !clientSecret || !xToken) {
     throw new Error("Variáveis de ambiente Sankhya ausentes (OAUTH_URL, CLIENT_ID, CLIENT_SECRET, X_TOKEN)");
   }
 
-  const body = new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret });
-  const res = await fetch(oauthUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Token": xToken },
-    body: body.toString(),
+  const body = new URLSearchParams({
+    grant_type:    "client_credentials",
+    client_id:     clientId,
+    client_secret: clientSecret,
   });
+
+  const controller = new AbortController();
+  const timeout    = setTimeout(() => controller.abort(), 15_000);
+
+  let res;
+  try {
+    res = await fetch(oauthUrl, {
+      method:  "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Token": xToken },
+      body:    body.toString(),
+      signal:  controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Auth Sankhya falhou (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
-  _cachedToken = data.access_token;
-  _expiresAt = Date.now() + data.expires_in * 1000;
+  const data    = await res.json();
+  _cachedToken  = data.access_token;
+  _expiresAt    = Date.now() + data.expires_in * 1000;
   console.log("Token obtido! Expira em:", data.expires_in, "s");
   return _cachedToken;
 }
 
 async function fetchSankhya(url, options = {}) {
   const token = await getValidToken();
+
   const makeHeaders = (t) => ({
     ...(options.headers || {}),
     "Authorization": `Bearer ${t}`,
-    "Content-Type": "application/json",
+    "Content-Type":  "application/json",
   });
 
-  let res = await fetch(url, { ...options, headers: makeHeaders(token) });
-  if (res.status === 401) {
-    _cachedToken = null;
-    const fresh = await refreshToken();
-    res = await fetch(url, { ...options, headers: makeHeaders(fresh) });
+  // Timeout de 25s para queries pesadas
+  const controller = new AbortController();
+  const timeout    = setTimeout(() => controller.abort(), 25_000);
+
+  // Remove signal de options para não conflitar
+  const { signal: _ignored, ...restOptions } = options;
+
+  try {
+    let res = await fetch(url, {
+      ...restOptions,
+      headers: makeHeaders(token),
+      signal:  controller.signal,
+    });
+
+    if (res.status === 401) {
+      console.log("Token expirado, renovando...");
+      _cachedToken = null;
+      const fresh = await refreshToken();
+      res = await fetch(url, {
+        ...restOptions,
+        headers: makeHeaders(fresh),
+        signal:  controller.signal,
+      });
+    }
+
+    return res;
+  } finally {
+    clearTimeout(timeout);
   }
-  return res;
 }
 
-// ── SQL ─────────────────────────────────────────────────────────────────────
+// ── SQL ──────────────────────────────────────────────────────────────────────
 const SQL_OPERACOES = `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
@@ -84,40 +121,59 @@ ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  console.log(">>> Handler iniciado", new Date().toISOString());
 
+  try {
+    // 1. Autenticação Base44 com timeout de 5s
+    console.log(">>> Autenticando no Base44...");
+    const base44 = createClientFromRequest(req);
+    const user = await Promise.race([
+      base44.auth.me(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout na autenticação Base44 (5s)")), 5_000)
+      ),
+    ]);
+
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    console.log(">>> Auth ok");
+
+    // 2. Valida variável de ambiente
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     if (!baseUrl) throw new Error("SANKHYA_BASE_URL não configurada");
 
     const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
-    console.log("Buscando OPs Sankhya:", url);
+    console.log(">>> Chamando Sankhya:", url);
 
+    // 3. Executa query no Sankhya
     const res = await fetchSankhya(url, {
       method: "POST",
       body: JSON.stringify({
-        serviceName: "DbExplorerSP.executeQuery",
-        requestBody: { sql: SQL_OPERACOES },
+        serviceName:  "DbExplorerSP.executeQuery",
+        requestBody:  { sql: SQL_OPERACOES },
       }),
     });
 
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Sankhya HTTP ${res.status}: ${text}`);
+    }
+
     const json = await res.json();
-    console.log("Status Sankhya:", json.status);
+    console.log(">>> Status Sankhya:", json.status);
 
     if (String(json.status) !== "1") {
       throw new Error(`Sankhya retornou erro: ${json.statusMessage}`);
     }
 
-    const pedidos = converterParaMap(json);
+    // 4. Processa e retorna
+    const pedidos     = converterParaMap(json);
     const estatisticas = calcularEstatisticas(pedidos);
-    console.log("Pedidos encontrados:", Object.keys(pedidos).length);
+    console.log(">>> Pedidos encontrados:", Object.keys(pedidos).length);
 
     return Response.json({ pedidos, estatisticas });
 
   } catch (error) {
-    console.error("Erro em getDashboard:", error.message);
+    console.error(">>> ERRO em getDashboard:", error.message);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
@@ -137,29 +193,29 @@ function converterParaMap(json) {
   const resultado = {};
   for (const row of rows) {
     const pedido = getLong(row, colIndex, "NUMPEDIDO");
-    const op = getLong(row, colIndex, "IDIPROC");
+    const op     = getLong(row, colIndex, "IDIPROC");
     if (pedido == null || op == null) continue;
 
     const cPed = String(pedido);
-    const cOp = String(op);
+    const cOp  = String(op);
 
     if (!resultado[cPed]) resultado[cPed] = {};
     if (!resultado[cPed][cOp]) {
       resultado[cPed][cOp] = {
-        numeroPedido: pedido,
-        numeroOp: op,
+        numeroPedido:  pedido,
+        numeroOp:      op,
         situacaoGeral: getString(row, colIndex, "SITUACAO_GERAL"),
-        produtos: [],
-        atividades: [],
+        produtos:      [],
+        atividades:    [],
       };
     }
 
-    const opMap = resultado[cPed][cOp];
-
+    const opMap  = resultado[cPed][cOp];
     const idAtiv = getString(row, colIndex, "IDIATV");
+
     if (idAtiv && !opMap.atividades.some(a => a.id === idAtiv)) {
       opMap.atividades.push({
-        id: idAtiv,
+        id:       idAtiv,
         situacao: getString(row, colIndex, "SITUACAO_ATIV"),
         dhAceite: getString(row, colIndex, "DHACEITE"),
         dhInicio: getString(row, colIndex, "DHINICIO"),
@@ -169,8 +225,8 @@ function converterParaMap(json) {
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd != null && !opMap.produtos.some(p => p.codigo === codProd)) {
       opMap.produtos.push({
-        codigo: codProd,
-        descricao: getString(row, colIndex, "DESCRPROD"),
+        codigo:     codProd,
+        descricao:  getString(row, colIndex, "DESCRPROD"),
         referencia: getString(row, colIndex, "REFERENCIA"),
       });
     }
@@ -181,18 +237,21 @@ function converterParaMap(json) {
 
 function calcularEstatisticas(pedidos) {
   let totalOps = 0, aguardando = 0, emAndamento = 0, finalizadas = 0;
+
   for (const ops of Object.values(pedidos)) {
     for (const op of Object.values(ops)) {
       totalOps++;
       const ativs = op.atividades || [];
       const total = ativs.length;
-      const fin = ativs.filter(a => a.situacao === "Finalizada").length;
-      const em = ativs.filter(a => a.situacao === "Em andamento").length;
-      if (em > 0) emAndamento++;
-      else if (fin === total && total > 0) finalizadas++;
-      else aguardando++;
+      const fin   = ativs.filter(a => a.situacao === "Finalizada").length;
+      const em    = ativs.filter(a => a.situacao === "Em andamento").length;
+
+      if (em > 0)                          emAndamento++;
+      else if (fin === total && total > 0)  finalizadas++;
+      else                                  aguardando++;
     }
   }
+
   return { totalOps, aguardando, emAndamento, finalizadas };
 }
 
