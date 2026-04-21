@@ -1,5 +1,3 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-
 // ── Token Manager ────────────────────────────────────────────────────────────
 const MARGIN_MS = 60_000;
 let _cachedToken = null;
@@ -124,27 +122,14 @@ Deno.serve(async (req) => {
   console.log(">>> Handler iniciado", new Date().toISOString());
 
   try {
-    // 1. Autenticação Base44 com timeout de 5s
-    console.log(">>> Autenticando no Base44...");
-    const base44 = createClientFromRequest(req);
-    const user = await Promise.race([
-      base44.auth.me(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout na autenticação Base44 (5s)")), 5_000)
-      ),
-    ]);
-
-    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
-    console.log(">>> Auth ok");
-
-    // 2. Valida variável de ambiente
+    // 1. Valida variável de ambiente
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     if (!baseUrl) throw new Error("SANKHYA_BASE_URL não configurada");
 
     const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
     console.log(">>> Chamando Sankhya:", url);
 
-    // 3. Executa query no Sankhya
+    // 2. Executa query no Sankhya
     const res = await fetchSankhya(url, {
       method: "POST",
       body: JSON.stringify({
@@ -165,7 +150,7 @@ Deno.serve(async (req) => {
       throw new Error(`Sankhya retornou erro: ${json.statusMessage}`);
     }
 
-    // 4. Processa e retorna
+    // 3. Processa e retorna
     const pedidos     = converterParaMap(json);
     const estatisticas = calcularEstatisticas(pedidos);
     console.log(">>> Pedidos encontrados:", Object.keys(pedidos).length);
