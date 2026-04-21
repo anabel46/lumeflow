@@ -6,7 +6,7 @@ export function useSankhyaDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetch = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -20,8 +20,8 @@ export function useSankhyaDashboard() {
   }, []);
 
   useEffect(() => {
-    fetch();
-  }, [fetch]);
+    fetchData();
+  }, [fetchData]);
 
-  return { data, loading, error, refetch: fetch };
+  return { data, loading, error, refetch: fetchData };
 }
