@@ -15,7 +15,6 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, SECTOR_LABELS } from "@/lib/constants";
 import { Link } from "react-router-dom";
-import SankhyaOpsSection from "@/components/production/SankhyaOpsSection";
 
 const STATUS_TABS = [
   { value: "all", label: "Todos" },
@@ -263,10 +262,6 @@ function OrderGroupCard({ group, selectedIds, onToggle, onStart, onPause, onSele
         </div>
       )}
 
-      {/* Sankhya ERP Section */}
-      <div className="pt-4 border-t">
-        <SankhyaOpsSection />
-      </div>
     </div>
   );
 }
