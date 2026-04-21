@@ -20,13 +20,49 @@ export function useSankhyaData() {
     setLoading(true);
     setError(null);
     try {
-      const response = await base44.functions.invoke("getDashboard", {});
-      // invoke retorna direto o objeto { estatisticas, pedidos }
-      _cache = response;
+      // Busca dados do banco (ProductionOrder)
+      const orders = await base44.entities.ProductionOrder.list();
+      
+      // Agrupa por número de pedido
+      const pedidos = {};
+      let totalOps = 0;
+      let emAndamento = 0;
+      let finalizadas = 0;
+      let aguardando = 0;
+
+      for (const order of orders) {
+        const numPedido = order.order_number;
+        if (!pedidos[numPedido]) {
+          pedidos[numPedido] = {};
+        }
+        
+        pedidos[numPedido][order.unique_number] = {
+          numeroOp: order.unique_number,
+          numeroPedido: numPedido,
+          situacaoGeral: order.status,
+          produtos: [{ descricao: order.product_name, referencia: "—" }],
+          atividades: [],
+        };
+
+        totalOps++;
+        if (order.status === "em_producao") emAndamento++;
+        if (order.status === "finalizado") finalizadas++;
+        if (order.status === "planejamento") aguardando++;
+      }
+
+      _cache = {
+        estatisticas: {
+          totalOps,
+          emAndamento,
+          finalizadas,
+          aguardando,
+        },
+        pedidos,
+      };
       _cacheTime = Date.now();
       setData(_cache);
     } catch (err) {
-      setError(err.message || "Erro ao buscar dados do Sankhya");
+      setError(err.message || "Erro ao buscar dados");
     } finally {
       setLoading(false);
     }
