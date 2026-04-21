@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useSankhyaData as useSankhyaDashboard } from "@/hooks/useSankhyaData";
+import { useSankhyaData } from "@/hooks/useSankhyaData";
+import SankhyaOpsPanel from "@/components/sankhya/SankhyaOpsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertCircle, Clock, Play, CheckCircle2, Activity, ChevronDown, ChevronRight } from "lucide-react";
@@ -81,8 +82,8 @@ function OPCard({ op }) {
   );
 }
 
-function PedidoCard({ numeroPedido, ops }) {
-  const [expanded, setExpanded] = useState(true);
+function PedidoCard({ numeroPedido, ops, getOpsByPedido }) {
+  const [expanded, setExpanded] = useState(false);
   const opList = Object.values(ops);
   const totalOps = opList.length;
 
@@ -99,10 +100,8 @@ function PedidoCard({ numeroPedido, ops }) {
         </div>
       </button>
       {expanded && (
-        <div className="px-4 pb-4 grid gap-2">
-          {opList.map((op) => (
-            <OPCard key={op.numeroOp} op={op} />
-          ))}
+        <div className="px-4 pb-4">
+          <SankhyaOpsPanel ops={getOpsByPedido(numeroPedido)} />
         </div>
       )}
     </div>
@@ -110,7 +109,7 @@ function PedidoCard({ numeroPedido, ops }) {
 }
 
 export default function SankhyaDashboard() {
-  const { data, loading, error, refetch } = useSankhyaDashboard();
+  const { data, loading, error, refetch, getOpsByPedido } = useSankhyaData();
 
   const pedidos = data?.pedidos ? Object.entries(data.pedidos) : [];
   const est = data?.estatisticas;
@@ -183,7 +182,7 @@ export default function SankhyaDashboard() {
       {pedidos.length > 0 && (
         <div className="space-y-3">
           {pedidos.map(([numeroPedido, ops]) => (
-            <PedidoCard key={numeroPedido} numeroPedido={numeroPedido} ops={ops} />
+            <PedidoCard key={numeroPedido} numeroPedido={numeroPedido} ops={ops} getOpsByPedido={getOpsByPedido} />
           ))}
         </div>
       )}

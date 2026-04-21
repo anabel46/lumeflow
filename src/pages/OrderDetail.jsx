@@ -13,11 +13,14 @@ import ApprovalPanel from "@/components/orders/ApprovalPanel";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, SECTOR_LABELS } from "@/lib/constants";
+import { useSankhyaData } from "@/hooks/useSankhyaData";
+import SankhyaOpsPanel from "@/components/sankhya/SankhyaOpsPanel";
 
 export default function OrderDetail() {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [showAddItem, setShowAddItem] = useState(false);
+  const { getOpsByPedido, loading: sankhyaLoading, error: sankhyaError } = useSankhyaData();
 
   const { data: order } = useQuery({
     queryKey: ["order", id],
@@ -250,6 +253,19 @@ export default function OrderDetail() {
             });
           })()
         )}
+      </div>
+
+      {/* Sankhya ERP OPs */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">OPs no ERP (Sankhya)</h2>
+          <span className="text-xs text-muted-foreground">Pedido #{order.order_number}</span>
+        </div>
+        <SankhyaOpsPanel
+          ops={getOpsByPedido(order.order_number)}
+          loading={sankhyaLoading}
+          error={sankhyaError}
+        />
       </div>
 
       {/* Add Item Dialog */}
