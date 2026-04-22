@@ -98,6 +98,7 @@ const SQL_OPERACOES = `SELECT
     P.STATUSPROC AS SITUACAO_GERAL,
     A.IDIATV,
     A.IDEFX,
+    FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
     CASE
         WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
         WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.[TIPO] IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
@@ -111,6 +112,7 @@ const SQL_OPERACOES = `SELECT
     PRO.REFERENCIA
 FROM TPRIPROC P
 INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
+LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDIATV
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
@@ -198,14 +200,15 @@ function converterParaMap(json) {
     const opMap  = resultado[cPed][cOp];
     const idAtiv = getString(row, colIndex, "IDIATV");
 
-    if (idAtiv && !opMap.atividades.some(a => a.id === idAtiv)) {
-      opMap.atividades.push({
-        id:       idAtiv,
-        situacao: getString(row, colIndex, "SITUACAO_ATIV"),
-        dhAceite: getString(row, colIndex, "DHACEITE"),
-        dhInicio: getString(row, colIndex, "DHINICIO"),
-      });
-    }
+if (idAtiv && !opMap.atividades.some(a => a.id === idAtiv)) {
+  opMap.atividades.push({
+    id:                idAtiv,
+    descricao:         getString(row, colIndex, "DESCRICAO_ATIVIDADE"), // ← novo
+    situacao:          getString(row, colIndex, "SITUACAO_ATIV"),
+    dhAceite:          getString(row, colIndex, "DHACEITE"),
+    dhInicio:          getString(row, colIndex, "DHINICIO"),
+  });
+}
 
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd != null && !opMap.produtos.some(p => p.codigo === codProd)) {
