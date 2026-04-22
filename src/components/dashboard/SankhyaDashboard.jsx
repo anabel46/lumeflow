@@ -82,7 +82,7 @@ function OPCard({ op }) {
   );
 }
 
-function PedidoCard({ numeroPedido, ops, getOpsByPedido }) {
+function PedidoCard({ numeroPedido, ops }) {
   const [expanded, setExpanded] = useState(false);
   const opList = Object.values(ops);
   const totalOps = opList.length;
@@ -101,7 +101,7 @@ function PedidoCard({ numeroPedido, ops, getOpsByPedido }) {
       </button>
       {expanded && (
         <div className="px-4 pb-4">
-          <SankhyaOpsPanel ops={getOpsByPedido(numeroPedido)} />
+          <SankhyaOpsPanel ops={ops} />
         </div>
       )}
     </div>
@@ -182,7 +182,7 @@ export default function SankhyaDashboard() {
       {pedidos.length > 0 && (
         <div className="space-y-3">
           {pedidos.map(([numeroPedido, ops]) => (
-            <PedidoCard key={numeroPedido} numeroPedido={numeroPedido} ops={ops} getOpsByPedido={getOpsByPedido} />
+            <PedidoCard key={numeroPedido} numeroPedido={numeroPedido} ops={ops} />
           ))}
         </div>
       )}
