@@ -211,12 +211,14 @@ export default function Production() {
   const now = new Date();
 
   // Fetch structured data from getDashboard API
-  const { data: apiData = {}, isLoading } = useQuery({
+  const { data: apiData = {}, isLoading, error } = useQuery({
     queryKey: ["dashboard-sankhya"],
     queryFn: async () => {
       const response = await base44.functions.invoke("getDashboard", {});
       return response.data;
     },
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const pedidos = apiData?.pedidos || {};
