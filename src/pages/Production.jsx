@@ -23,33 +23,19 @@ const STATUS_TABS = [
   { value: "F", label: "Finalizado" },
 ];
 
-function ProgressBar({ atividades = [], status }) {
-  if (!atividades || atividades.length === 0) return null;
-  const total = atividades.length;
-  const finalizadas = atividades.filter(a => a.situacao === "Finalizada").length;
-  const pct = Math.round((finalizadas / total) * 100);
-  
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-        <div
-          className={cn("h-full rounded-full transition-all", status === "F" ? "bg-emerald-500" : "bg-primary")}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-[10px] text-muted-foreground shrink-0">{pct}%</span>
-    </div>
-  );
-}
+
 
 function PORow({ op, selected, onToggle, onStart, onPause, now }) {
-  const isOverdue = op.delivery_deadline && new Date(op.delivery_deadline) < now && op.situacaoGeral !== "F";
+  const produto = op.produtos?.[0];
+  const ativAtual = op.atividades?.[0];
+  const totalAtiv = op.atividades?.length || 0;
+  const finalizadas = op.atividades?.filter(a => a.situacao === "Finalizada").length || 0;
+  const pct = totalAtiv > 0 ? Math.round((finalizadas / totalAtiv) * 100) : 0;
 
   return (
     <div className={cn(
       "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-all",
       selected ? "bg-primary/5 border-primary/30" : "bg-card border-border/50 hover:border-border",
-      isOverdue && "border-red-200 bg-red-50/20",
       op.situacaoGeral === "F" && "opacity-60"
     )}>
       {/* Checkbox */}
@@ -66,25 +52,29 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="flex items-center flex-wrap gap-1.5">
           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.numeroOp}</span>
-          {op.produtos?.[0] && (
-            <>
-              <span className="text-sm font-semibold truncate">{op.produtos[0].descricao}</span>
-              {op.produtos[0].referencia && <span className="text-[11px] text-muted-foreground font-mono">({op.produtos[0].referencia})</span>}
-            </>
-          )}
-          {isOverdue && (
-            <Badge variant="outline" className="text-[9px] border-red-300 text-red-600 py-0 px-1 gap-0.5">
-              <AlertTriangle className="w-2 h-2" />Atrasado
-            </Badge>
+          <span className="text-sm font-semibold">{op.descricaoAtividade}</span>
+          {produto && produto.referencia && (
+            <span className="text-[11px] text-muted-foreground font-mono">({produto.referencia})</span>
           )}
         </div>
 
-        <ProgressBar atividades={op.atividades} status={op.situacaoGeral} />
+        {/* Progress */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+            <div
+              className={cn("h-full rounded-full transition-all", op.situacaoGeral === "F" ? "bg-emerald-500" : "bg-primary")}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-muted-foreground shrink-0">{pct}%</span>
+        </div>
 
-        {op.descricaoAtividade && op.situacaoGeral === "A" && (
+        {/* Atividade atual */}
+        {ativAtual && op.situacaoGeral === "A" && (
           <div className="flex items-center gap-1 text-[11px] text-blue-600">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            <span className="font-semibold">{op.descricaoAtividade}</span>
+            <span className="font-semibold">{ativAtual.descricao}</span>
+            {ativAtual.situacao && <span className="text-muted-foreground">· {ativAtual.situacao}</span>}
           </div>
         )}
       </div>
@@ -123,13 +113,9 @@ function PedidoCard({ numeroPedido, ops, selectedIds, onToggle, onStart, onPause
 
   const selectableIds = opsList.filter(o => o.situacaoGeral !== "F").map(o => o.numeroOp);
   const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
-  const someSelected = selectableIds.some(id => selectedIds.has(id));
 
   return (
-    <div className={cn(
-      "bg-card rounded-xl border border-border/60 overflow-hidden hover:shadow-sm transition-all",
-      finalizadas < total && "border-border/60"
-    )}>
+    <div className="bg-card rounded-xl border border-border/60 overflow-hidden hover:shadow-sm transition-all">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
         {/* Select all checkbox */}
@@ -145,11 +131,9 @@ function PedidoCard({ numeroPedido, ops, selectedIds, onToggle, onStart, onPause
         {/* Toggle expand */}
         <button className="flex-1 flex items-center gap-3 text-left min-w-0" onClick={() => setExpanded(e => !e)}>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-sm hover:text-primary transition-colors">
-                Pedido #{numeroPedido}
-              </span>
-            </div>
+            <span className="font-bold text-sm hover:text-primary transition-colors">
+              Pedido #{numeroPedido}
+            </span>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
@@ -157,7 +141,6 @@ function PedidoCard({ numeroPedido, ops, selectedIds, onToggle, onStart, onPause
               <p className="text-xs font-semibold">{finalizadas}/{total} OPs</p>
               {emAndamento > 0 && <p className="text-[10px] text-blue-600">{emAndamento} produzindo</p>}
             </div>
-            {/* Mini ring */}
             <div className="relative w-8 h-8 shrink-0">
               <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
                 <circle cx="16" cy="16" r="12" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
