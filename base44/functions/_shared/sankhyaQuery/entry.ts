@@ -7,6 +7,7 @@ const SQL_OPERACOES = `SELECT
     P.STATUSPROC AS SITUACAO_GERAL,
     A.IDIATV,
     A.IDEFX,
+    A.DESCRICAO AS DESCRICAO_ATIV,
     CASE
         WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
         WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.[TIPO] IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
@@ -104,6 +105,7 @@ function converterParaMap(json) {
     if (idAtiv !== "" && !opMap.atividades.some((a) => a.id === idAtiv)) {
       opMap.atividades.push({
         id: idAtiv,
+        descricao: getString(row, colIndex, "DESCRICAO_ATIV"),
         situacao: getString(row, colIndex, "SITUACAO_ATIV"),
         dhAceite: getString(row, colIndex, "DHACEITE"),
         dhInicio: getString(row, colIndex, "DHINICIO"),
