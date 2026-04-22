@@ -208,12 +208,12 @@ export default function Production() {
     queryKey: ["dashboard-sankhya"],
     queryFn: async () => {
       const response = await base44.functions.invoke("getDashboard", {});
-      return response.data || response;
+      return response.data;
     },
   });
 
-  const pedidos = apiData.pedidos || {};
-  const estatisticas = apiData.estatisticas || {};
+  const pedidos = apiData?.pedidos || {};
+  const estatisticas = apiData?.estatisticas || {};
 
   // Flatten OPs for filtering
   const allOps = useMemo(() => {

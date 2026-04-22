@@ -149,15 +149,13 @@ Deno.serve(async (req) => {
     });
 
     return Response.json({
-      data: {
-        estatisticas: {
-          totalOps,
-          emAndamento,
-          finalizadas,
-          aguardando,
-        },
-        pedidos: pedidosMap,
-      }
+      estatisticas: {
+        totalOps,
+        emAndamento,
+        finalizadas,
+        aguardando,
+      },
+      pedidos: pedidosMap,
     });
   } catch (error) {
     console.error("❌ Erro em getDashboard:", error.message);
