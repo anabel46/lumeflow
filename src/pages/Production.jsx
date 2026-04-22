@@ -74,7 +74,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
         {/* Etapas de produção - Kanban style */}
         {op.atividades && op.atividades.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
-            {op.atividades.map((ativ, idx) => (
+            {Array.from(new Map(op.atividades.map(a => [a.descricao, a])).values()).map((ativ, idx) => (
               <Badge
                 key={idx}
                 variant="outline"
