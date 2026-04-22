@@ -27,7 +27,7 @@ const STATUS_TABS = [
 
 function PORow({ op, selected, onToggle, onStart, onPause, now }) {
   const produto = op.produtos?.[0];
-  const ativAtual = op.atividades?.[0];
+  const ativAtual = op.atividades?.find(a => a.situacao === "Em andamento") || op.atividades?.[0];
   const totalAtiv = op.atividades?.length || 0;
   const finalizadas = op.atividades?.filter(a => a.situacao === "Finalizada").length || 0;
   const pct = totalAtiv > 0 ? Math.round((finalizadas / totalAtiv) * 100) : 0;
@@ -50,11 +50,13 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
 
       {/* Info */}
       <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="flex items-center flex-wrap gap-1.5">
+        {/* Header: OP + Descrição + Produto + Referência */}
+        <div className="flex items-center flex-wrap gap-2">
           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.numeroOp}</span>
-          <span className="text-sm font-semibold">{op.descricaoAtividade}</span>
-          {produto && produto.referencia && (
-            <span className="text-[11px] text-muted-foreground font-mono">({produto.referencia})</span>
+          <span className="text-sm font-semibold text-blue-600">{ativAtual?.descricao || "—"}</span>
+          <span className="text-sm font-medium">{produto?.descricao}</span>
+          {produto?.referencia && (
+            <span className="text-[11px] text-muted-foreground font-mono">{produto.referencia}</span>
           )}
         </div>
 
@@ -69,7 +71,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
           <span className="text-[10px] text-muted-foreground shrink-0">{pct}%</span>
         </div>
 
-        {/* Etapas de produção */}
+        {/* Etapas de produção - Kanban style */}
         {op.atividades && op.atividades.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
             {op.atividades.map((ativ, idx) => (
@@ -91,12 +93,11 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
           </div>
         )}
 
-        {/* Atividade atual */}
+        {/* Status atual com indicator */}
         {ativAtual && op.situacaoGeral === "A" && (
-          <div className="flex items-center gap-1 text-[11px] text-blue-600">
+          <div className="flex items-center gap-1.5 text-[11px]">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            <span className="font-semibold">{ativAtual.descricao || ativAtual.id}</span>
-            {ativAtual.situacao && <span className="text-muted-foreground">· {ativAtual.situacao}</span>}
+            <span className="text-blue-600 font-semibold">{ativAtual.situacao}</span>
           </div>
         )}
       </div>
