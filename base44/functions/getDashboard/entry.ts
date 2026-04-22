@@ -58,13 +58,11 @@ async function fetchSankhya(url, options = {}) {
 
 // ── SQL Query Builder ────────────────────────────────────────────────────────
 function getSql(opId) {
-  // Se você passar uma OP específica, removemos o filtro de status 'A' 
-  // para garantir que ela apareça mesmo se estiver finalizada.
-  const whereClause = opId 
-    ? `WHERE P.IDIPROC = ${Number(opId)}` 
+  const whereClause = opId
+    ? `WHERE P.IDIPROC = ${Number(opId)}`
     : `WHERE P.STATUSPROC = 'A'`;
 
-return `SELECT
+  return `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
@@ -82,7 +80,7 @@ return `SELECT
     PRO.REFERENCIA
 FROM TPRIPROC P
 INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX AND FX.IDPROC = P.IDPROC
+LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
@@ -98,11 +96,11 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const urlObj = new URL(req.url);
-    const opRequested = urlObj.searchParams.get("op"); // Ex: ?op=440
+    const opRequested = urlObj.searchParams.get("op");
 
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
-    
+
     const res = await fetchSankhya(url, {
       method: "POST",
       body: JSON.stringify({
@@ -137,47 +135,37 @@ function converterParaMap(json) {
 
   for (const row of body.rows) {
     const pedido = getLong(row, colIndex, "NUMPEDIDO");
-    const op = getLong(row, colIndex, "IDIPROC");
-    if (!pedido || !op) continue;
+    if (!pedido) continue;
 
-    const cPed = String(pedido);
-    const cOp = String(op);
+    const cPed  = String(pedido);
+    const cAtiv = getString(row, colIndex, "IDIATV");
+    if (!cAtiv) continue;
 
     if (!resultado[cPed]) resultado[cPed] = {};
-    if (!resultado[cPed][cOp]) {
-      resultado[cPed][cOp] = {
-        numeroPedido: pedido,
-        numeroOp: op,
-        situacaoGeral: getString(row, colIndex, "SITUACAO_GERAL"),
-        // Pegamos a descrição da atividade atual da linha
+
+    if (!resultado[cPed][cAtiv]) {
+      resultado[cPed][cAtiv] = {
+        numeroPedido:       pedido,
+        numeroOp:           getLong(row, colIndex, "IDIPROC"),
+        idAtividade:        cAtiv,
+        situacaoGeral:      getString(row, colIndex, "SITUACAO_GERAL"),
         descricaoAtividade: getString(row, colIndex, "DESCRICAO_ATIVIDADE"),
-        produtos: [],
-        atividades: [],
+        situacao:           getString(row, colIndex, "SITUACAO_ATIV"),
+        produtos:           [],
       };
     }
 
-    const opRef = resultado[cPed][cOp];
-
-    // Adiciona Atividade se não existir na lista
-    const idAtiv = getString(row, colIndex, "IDIATV");
-    if (idAtiv && !opRef.atividades.find(a => a.id === idAtiv)) {
-      opRef.atividades.push({
-        id: idAtiv,
-        descricao: getString(row, colIndex, "DESCRICAO_ATIVIDADE"),
-        situacao: getString(row, colIndex, "SITUACAO_ATIV"),
-      });
-    }
-
-    // Adiciona Produto se não existir na lista
+    const ref     = resultado[cPed][cAtiv];
     const codProd = getLong(row, colIndex, "CODPROD");
-    if (codProd && !opRef.produtos.find(p => p.codigo === codProd)) {
-      opRef.produtos.push({
-        codigo: codProd,
-        descricao: getString(row, colIndex, "DESCRPROD"),
+    if (codProd && !ref.produtos.find(p => p.codigo === codProd)) {
+      ref.produtos.push({
+        codigo:     codProd,
+        descricao:  getString(row, colIndex, "DESCRPROD"),
         referencia: getString(row, colIndex, "REFERENCIA"),
       });
     }
   }
+
   return resultado;
 }
 
@@ -186,9 +174,9 @@ function calcularEstatisticas(pedidosMap) {
   Object.values(pedidosMap).forEach(ops => {
     Object.values(ops).forEach(op => {
       stats.totalOps++;
-      if (op.situacaoGeral === "P") stats.aguardando++;
-      else if (op.situacaoGeral === "A") stats.emAndamento++;
-      else if (op.situacaoGeral === "F") stats.finalizadas++;
+      if (op.situacao === "Aguardando aceite") stats.aguardando++;
+      else if (op.situacao === "Em andamento")  stats.emAndamento++;
+      else if (op.situacao === "Finalizada")    stats.finalizadas++;
     });
   });
   return stats;
