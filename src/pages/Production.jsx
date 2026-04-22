@@ -69,6 +69,28 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
           <span className="text-[10px] text-muted-foreground shrink-0">{pct}%</span>
         </div>
 
+        {/* Etapas de produção */}
+        {op.atividades && op.atividades.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap">
+            {op.atividades.map((ativ, idx) => (
+              <Badge
+                key={idx}
+                variant="outline"
+                className={cn(
+                  "text-[10px] py-0.5 px-2 font-medium",
+                  ativ.situacao === "Finalizada" 
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                    : ativ.situacao === "Em andamento"
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-muted text-muted-foreground border-border"
+                )}
+              >
+                {ativ.descricao || ativ.id}
+              </Badge>
+            ))}
+          </div>
+        )}
+
         {/* Atividade atual */}
         {ativAtual && op.situacaoGeral === "A" && (
           <div className="flex items-center gap-1 text-[11px] text-blue-600">

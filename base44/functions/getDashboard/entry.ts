@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// ── Token Manager ────────────────────────────────────────
+// ── Token Manager ────────────────────────────────────────────────────────────
 const MARGIN_MS = 60_000;
 let _cachedToken = null;
 let _expiresAt = 0;
@@ -74,34 +74,31 @@ async function fetchSankhya(url, options = {}) {
   return res;
 }
 
-// ── SQL Query ────────────────────────────────────────────
+// ── SQL Query com JOIN para descricaoAtividade ────────────────────────────────
 const SQL_OPERACOES = `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
     A.IDIATV,
-    A.IDEFX,
-    FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
+    TP.DESCRICAO_ATIVIDADE,
     CASE
         WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
         WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.[TIPO] IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
         ELSE 'Finalizada'
     END AS SITUACAO_ATIV,
-    A.DHINCLUSAO,
-    A.DHACEITE,
-    A.DHINICIO,
     ITE.CODPROD,
     PRO.DESCRPROD,
     PRO.REFERENCIA
 FROM TPRIPROC P
 INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
+LEFT JOIN TPREFX TP ON TP.IDEFX = A.IDEFX
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-WHERE P.STATUSPROC = 'A'
+WHERE P.STATUSPROC IN ('A', 'P')
 ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
 
+// ── Main Handler ─────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -111,12 +108,10 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log("🔄 Buscando dados do Sankhya...", new Date().toISOString());
-
-    // Busca dados do Sankhya
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     if (!baseUrl) throw new Error("SANKHYA_BASE_URL não configurada");
 
+    // Chamada ao Sankhya
     const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
     const res = await fetchSankhya(url, {
       method: "POST",
@@ -131,41 +126,25 @@ Deno.serve(async (req) => {
       throw new Error(`Sankhya erro: ${json.statusMessage}`);
     }
 
+    // Processa resultado
     const pedidosMap = converterParaMap(json);
-    console.log("✅ Sankhya retornou:", Object.keys(pedidosMap).length, "pedidos");
-
-    // Calcula estatísticas
-    let totalOps = 0;
-    let emAndamento = 0;
-    let finalizadas = 0;
-    let aguardando = 0;
-
-    Object.values(pedidosMap).forEach(opsMap => {
-      Object.values(opsMap).forEach(op => {
-        totalOps++;
-        const ativAtual = op.atividades?.[0];
-        if (ativAtual?.situacao === "Em andamento") emAndamento++;
-        else if (ativAtual?.situacao === "Finalizada") finalizadas++;
-        else aguardando++;
-      });
-    });
+    const estatisticas = calcularEstatisticas(pedidosMap);
 
     return Response.json({
-      estatisticas: {
-        totalOps,
-        emAndamento,
-        finalizadas,
-        aguardando,
-      },
       pedidos: pedidosMap,
+      estatisticas,
     });
   } catch (error) {
     console.error("❌ Erro em getDashboard:", error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ 
+      error: error.message,
+      pedidos: {},
+      estatisticas: {}
+    }, { status: 500 });
   }
 });
 
-// ── Helpers ──────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function converterParaMap(json) {
   const body = json.responseBody;
   if (!body || !body.rows) return {};
@@ -178,7 +157,7 @@ function converterParaMap(json) {
     colIndex[meta[i].name.toUpperCase()] = i;
   }
 
-  const resultadoFinal = {};
+  const resultado = {};
 
   for (const row of rows) {
     const pedido = getLong(row, colIndex, "NUMPEDIDO");
@@ -189,36 +168,33 @@ function converterParaMap(json) {
     const cPed = String(pedido);
     const cOp = String(op);
 
-    if (!resultadoFinal[cPed]) resultadoFinal[cPed] = {};
+    if (!resultado[cPed]) resultado[cPed] = {};
 
-    if (!resultadoFinal[cPed][cOp]) {
-      resultadoFinal[cPed][cOp] = {
+    if (!resultado[cPed][cOp]) {
+      resultado[cPed][cOp] = {
         numeroPedido: pedido,
         numeroOp: op,
         situacaoGeral: getString(row, colIndex, "SITUACAO_GERAL"),
-        descricaoAtividade: "",
+        descricaoAtividade: getString(row, colIndex, "DESCRICAO_ATIVIDADE"),
         produtos: [],
         atividades: [],
       };
     }
 
-    const opMap = resultadoFinal[cPed][cOp];
+    const opMap = resultado[cPed][cOp];
 
+    // Adiciona atividade
     const idAtiv = getString(row, colIndex, "IDIATV");
+    const descAtiv = getString(row, colIndex, "DESCRICAO_ATIVIDADE");
     if (idAtiv !== "" && !opMap.atividades.some((a) => a.id === idAtiv)) {
-      const descAtiv = getString(row, colIndex, "DESCRICAO_ATIVIDADE");
       opMap.atividades.push({
         id: idAtiv,
-        descricao: descAtiv,
+        descricao: descAtiv || idAtiv,
         situacao: getString(row, colIndex, "SITUACAO_ATIV"),
-        dhAceite: getString(row, colIndex, "DHACEITE"),
-        dhInicio: getString(row, colIndex, "DHINICIO"),
       });
-      if (!opMap.descricaoAtividade) {
-        opMap.descricaoAtividade = descAtiv;
-      }
     }
 
+    // Adiciona produto
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd != null && !opMap.produtos.some((p) => p.codigo === codProd)) {
       opMap.produtos.push({
@@ -229,7 +205,27 @@ function converterParaMap(json) {
     }
   }
 
-  return resultadoFinal;
+  return resultado;
+}
+
+function calcularEstatisticas(pedidosMap) {
+  const stats = {
+    totalOps: 0,
+    aguardando: 0,
+    emAndamento: 0,
+    finalizadas: 0,
+  };
+
+  Object.values(pedidosMap).forEach((opsMap) => {
+    Object.values(opsMap).forEach((op) => {
+      stats.totalOps++;
+      if (op.situacaoGeral === "P") stats.aguardando++;
+      else if (op.situacaoGeral === "A") stats.emAndamento++;
+      else if (op.situacaoGeral === "F") stats.finalizadas++;
+    });
+  });
+
+  return stats;
 }
 
 function getNode(row, idx, col) {
