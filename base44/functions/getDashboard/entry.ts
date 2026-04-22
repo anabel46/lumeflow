@@ -74,8 +74,20 @@ async function fetchSankhya(url, options = {}) {
   return res;
 }
 
-// ── SQL Query ────────────────────────────────────────────────────────────────
-const SQL_OPERACOES = `SELECT
+// ── SQL Query Builder (Dinâmico) ─────────────────────────────────────────────
+function buildSqlOperacoes(numeroOp) {
+  // Filtro base: apenas OPs ativas. 
+  // Se quiser ver a 440 mesmo que esteja finalizada, remova "P.STATUSPROC = 'A'"
+  let condicoes = ["P.STATUSPROC = 'A'"];
+
+  if (numeroOp) {
+    // Garante que o valor seja tratado como número para segurança
+    condicoes.push(`P.IDIPROC = ${Number(numeroOp)}`);
+  }
+
+  const whereClause = condicoes.length > 0 ? `WHERE ${condicoes.join(" AND ")}` : "";
+
+  return `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
@@ -99,8 +111,9 @@ LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-WHERE P.STATUSPROC = 'A' AND P.IDIPROC = 440
+${whereClause}
 ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
+}
 
 // ── Main Handler ─────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
@@ -112,16 +125,20 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Pega o número da OP da URL (ex: ?op=440)
+    const urlObj = new URL(req.url);
+    const opDesejada = urlObj.searchParams.get("op");
+
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     if (!baseUrl) throw new Error("SANKHYA_BASE_URL não configurada");
 
-    // Chamada ao Sankhya
-    const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
-    const res = await fetchSankhya(url, {
+    // Chamada ao Sankhya com o SQL filtrado
+    const urlSankhya = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
+    const res = await fetchSankhya(urlSankhya, {
       method: "POST",
       body: JSON.stringify({
         serviceName: "DbExplorerSP.executeQuery",
-        requestBody: { sql: SQL_OPERACOES },
+        requestBody: { sql: buildSqlOperacoes(opDesejada) },
       }),
     });
 
@@ -187,7 +204,6 @@ function converterParaMap(json) {
 
     const opMap = resultado[cPed][cOp];
 
-    // Adiciona atividade
     const idAtiv = getString(row, colIndex, "IDIATV");
     const descAtiv = getString(row, colIndex, "DESCRICAO_ATIVIDADE");
     if (idAtiv !== "" && !opMap.atividades.some((a) => a.id === idAtiv)) {
@@ -198,7 +214,6 @@ function converterParaMap(json) {
       });
     }
 
-    // Adiciona produto
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd != null && !opMap.produtos.some((p) => p.codigo === codProd)) {
       opMap.produtos.push({
