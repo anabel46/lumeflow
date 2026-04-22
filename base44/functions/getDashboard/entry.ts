@@ -74,28 +74,32 @@ async function fetchSankhya(url, options = {}) {
   return res;
 }
 
-// ── SQL Query com JOIN para descricaoAtividade ────────────────────────────────
+// ── SQL Query ────────────────────────────────────────────────────────────────
 const SQL_OPERACOES = `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
     A.IDIATV,
-    TP.DESCRICAO_ATIVIDADE,
+    A.IDEFX,
+    FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
     CASE
         WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
         WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.[TIPO] IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
         ELSE 'Finalizada'
     END AS SITUACAO_ATIV,
+    A.DHINCLUSAO,
+    A.DHACEITE,
+    A.DHINICIO,
     ITE.CODPROD,
     PRO.DESCRPROD,
     PRO.REFERENCIA
 FROM TPRIPROC P
 INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-LEFT JOIN TPREFX TP ON TP.IDEFX = A.IDEFX
+LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-WHERE P.STATUSPROC IN ('A', 'P')
+WHERE P.STATUSPROC = 'A'
 ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
 
 // ── Main Handler ─────────────────────────────────────────────────────────────
