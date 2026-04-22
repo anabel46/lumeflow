@@ -191,33 +191,33 @@ function converterParaMap(json) {
 
     if (!resultadoFinal[cPed]) resultadoFinal[cPed] = {};
 
-    if (!resultadoFinal[cPed][cOp]) {
-      resultadoFinal[cPed][cOp] = {
-        numeroPedido: pedido,
-        numeroOp: op,
-        situacaoGeral: getString(row, colIndex, "SITUACAO_GERAL"),
-        descricaoAtividade: "",
-        produtos: [],
-        atividades: [],
-      };
-    }
+    if (!resultado[cPed][cOp]) {
+  resultado[cPed][cOp] = {
+    numeroPedido:        pedido,
+    numeroOp:            op,
+    situacaoGeral:       getString(row, colIndex, "SITUACAO_GERAL"),
+    descricaoAtividade:  getString(row, colIndex, "DESCRICAO_ATIVIDADE"), // ← novo
+    produtos:            [],
+    atividades:          [],
+  };
+}
 
     const opMap = resultadoFinal[cPed][cOp];
 
-    const idAtiv = getString(row, colIndex, "IDIATV");
-    if (idAtiv !== "" && !opMap.atividades.some((a) => a.id === idAtiv)) {
-      const descAtiv = getString(row, colIndex, "DESCRICAO_ATIVIDADE");
-      opMap.atividades.push({
-        id: idAtiv,
-        descricao: descAtiv,
-        situacao: getString(row, colIndex, "SITUACAO_ATIV"),
-        dhAceite: getString(row, colIndex, "DHACEITE"),
-        dhInicio: getString(row, colIndex, "DHINICIO"),
-      });
-      if (!opMap.descricaoAtividade) {
-        opMap.descricaoAtividade = descAtiv;
-      }
-    }
+    const descAtiv = getString(row, colIndex, "DESCRICAO_ATIVIDADE"); // ← novo
+
+if (idAtiv !== "" && !opMap.atividades.some((a) => a.id === idAtiv)) {
+  opMap.atividades.push({
+    id:       idAtiv,
+    descricao: descAtiv,  // ← era idAtiv, agora é descAtiv
+    situacao:  getString(row, colIndex, "SITUACAO_ATIV"),
+    dhAceite:  getString(row, colIndex, "DHACEITE"),
+    dhInicio:  getString(row, colIndex, "DHINICIO"),
+  });
+  if (!opMap.descricaoAtividade) {
+    opMap.descricaoAtividade = descAtiv;  // ← era idAtiv, agora é descAtiv
+  }
+}
 
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd != null && !opMap.produtos.some((p) => p.codigo === codProd)) {
