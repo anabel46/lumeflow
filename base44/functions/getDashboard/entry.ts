@@ -185,16 +185,16 @@ function converterParaMap(json) {
     const cPed = String(pedido);
     const cOp  = String(op);
 
-    if (!resultado[cPed]) resultado[cPed] = {};
-    if (!resultado[cPed][cOp]) {
-      resultado[cPed][cOp] = {
-        numeroPedido:  pedido,
-        numeroOp:      op,
-        situacaoGeral: getString(row, colIndex, "SITUACAO_GERAL"),
-        produtos:      [],
-        atividades:    [],
-      };
-    }
+if (!resultado[cPed][cOp]) {
+  resultado[cPed][cOp] = {
+    numeroPedido:       pedido,
+    numeroOp:           op,
+    situacaoGeral:      getString(row, colIndex, "SITUACAO_GERAL"),
+    descricaoAtividade: getString(row, colIndex, "DESCRICAO_ATIVIDADE"), // ← novo
+    produtos:           [],
+    atividades:         [],
+  };
+}
 
     const opMap  = resultado[cPed][cOp];
     const idAtiv = getString(row, colIndex, "IDIATV");
