@@ -27,9 +27,10 @@ const STATUS_TABS = [
 
 function PORow({ op, selected, onToggle, onStart, onPause, now }) {
   const produto = op.produtos?.[0];
+  const uniqueAtividades = Array.from(new Map(op.atividades?.map(a => [a.descricao, a]) || []).values());
   const ativAtual = op.atividades?.find(a => a.situacao === "Em andamento") || op.atividades?.[0];
-  const totalAtiv = op.atividades?.length || 0;
-  const finalizadas = op.atividades?.filter(a => a.situacao === "Finalizada").length || 0;
+  const totalAtiv = uniqueAtividades.length || 0;
+  const finalizadas = uniqueAtividades.filter(a => a.situacao === "Finalizada").length || 0;
   const pct = totalAtiv > 0 ? Math.round((finalizadas / totalAtiv) * 100) : 0;
 
   return (
@@ -476,19 +477,19 @@ export default function Production() {
                     {op.produtos?.[0]?.referencia && <div className="text-[10px] text-muted-foreground">{op.produtos[0].referencia}</div>}
                   </td>
                   <td className="p-3 font-semibold">#{op.numeroPedido}</td>
-                  <td className="p-3 text-center text-sm">{op.descricaoAtividade || "—"}</td>
+                  <td className="p-3 text-center text-sm">{op.atividades?.find(a => a.situacao === "Em andamento")?.descricao || op.atividades?.[0]?.descricao || "—"}</td>
                   <td className="p-3">
                     <div className="flex items-center gap-1">
                       <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
                         <div
                           className={cn("h-full rounded-full", op.situacaoGeral === "F" ? "bg-emerald-500" : "bg-primary")}
                           style={{
-                            width: `${op.situacaoGeral === "F" ? 100 : op.atividades?.length > 0 ? Math.round((op.atividades.filter(a => a.situacao === "Finalizada").length / op.atividades.length) * 100) : 0}%`
+                            width: `${op.situacaoGeral === "F" ? 100 : op.atividades?.length > 0 ? Math.round((op.atividades.filter((a, i, arr) => a.situacao === "Finalizada" && arr.findIndex(x => x.descricao === a.descricao) === i).length / Array.from(new Map(op.atividades.map(a => [a.descricao, a])).values()).length) * 100) : 0}%`
                           }}
                         />
                       </div>
                       <span className="text-[9px] w-8 text-right">
-                        {op.situacaoGeral === "F" ? 100 : op.atividades?.length > 0 ? Math.round((op.atividades.filter(a => a.situacao === "Finalizada").length / op.atividades.length) * 100) : 0}%
+                        {op.situacaoGeral === "F" ? 100 : op.atividades?.length > 0 ? Math.round((op.atividades.filter((a, i, arr) => a.situacao === "Finalizada" && arr.findIndex(x => x.descricao === a.descricao) === i).length / Array.from(new Map(op.atividades.map(a => [a.descricao, a])).values()).length) * 100) : 0}%
                       </span>
                     </div>
                   </td>
