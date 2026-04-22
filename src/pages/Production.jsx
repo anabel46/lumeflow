@@ -51,15 +51,14 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
 
       {/* Info */}
       <div className="flex-1 min-w-0 space-y-1.5">
-        {/* Header: OP + Descrição + Produto + Referência */}
-        <div className="flex items-center flex-wrap gap-2">
-          <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.numeroOp}</span>
-          <span className="text-sm font-semibold text-blue-600">{ativAtual?.descricao || "—"}</span>
-          <span className="text-sm font-medium">{produto?.descricao}</span>
-          {produto?.referencia && (
-            <span className="text-[11px] text-muted-foreground font-mono">{produto.referencia}</span>
-          )}
-        </div>
+        {/* Header: OP + Referência + Produto */}
+         <div className="flex items-center flex-wrap gap-2">
+           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.numeroOp}</span>
+           {produto?.referencia && (
+             <span className="text-sm font-semibold text-blue-600">{produto.referencia}</span>
+           )}
+           <span className="text-sm font-medium">{produto?.descricao}</span>
+         </div>
 
         {/* Progress */}
         <div className="flex items-center gap-2">
