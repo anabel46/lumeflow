@@ -130,8 +130,22 @@ Deno.serve(async (req) => {
     }
 
     const pedidosMap = converterParaMap(json);
-    debugLog.push(`✅ Sankhya retornou: ${Object.keys(pedidosMap).length} pedidos`);
-    console.log("✅ Sankhya retornou:", Object.keys(pedidosMap).length, "pedidos");
+    const totalPedidos = Object.keys(pedidosMap).length;
+    debugLog.push(`✅ Sankhya retornou: ${totalPedidos} pedidos`);
+    console.log("✅ Sankhya retornou:", totalPedidos, "pedidos");
+
+    // Calcular total de OPs e encontrar a maior
+    const todasOps = [];
+    for (const opsMap of Object.values(pedidosMap)) {
+      for (const opData of Object.values(opsMap)) {
+        todasOps.push(opData);
+      }
+    }
+    const maxOp = todasOps.length > 0 ? Math.max(...todasOps.map(op => Number(op.numeroOp) || 0)) : 0;
+    
+    debugLog.push(`📦 Total de OPs retornadas pelo Sankhya: ${todasOps.length}`);
+    debugLog.push(`🔢 OP mais recente (maior número) do Sankhya: ${maxOp}`);
+    debugLog.push(`⚠️ Se a OP nova criada tem número > ${maxOp}, ela não está na query`);
 
     // 2. Sincroniza para ProductionOrder (usar service role para inserir)
     let insertedCount = 0;
