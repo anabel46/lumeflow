@@ -149,23 +149,31 @@ Deno.serve(async (req) => {
 
           debugLog.push(`🔍 Resultado: encontrados=${existing?.length}, buscado=${opData.numeroOp?.toString()}`);
 
-          // Se encontrou duplicatas, usar apenas o primeiro (ignorar os demais)
           const record = existing?.[0] || null;
 
           if (record) {
             // Atualiza usando o primeiro registro encontrado
-            if (existing.length > 1) {
-              debugLog.push(`⚠️ Duplicatas detectadas: ${existing.length} registros para OP ${opData.numeroOp}. Usando apenas o primeiro.`);
-            }
             debugLog.push(`♻️ Atualizando: ${opData.numeroOp}`);
             await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
               status: mapearStatus(opData.situacaoGeral),
             });
+
+            // Se houver duplicatas, deletar os demais para evitar corrupção
+            if (existing.length > 1) {
+              debugLog.push(`⚠️ Duplicatas encontradas: ${existing.length}. Deletando ${existing.length - 1} cópia(s)...`);
+              for (let i = 1; i < existing.length; i++) {
+                try {
+                  await base44.asServiceRole.entities.ProductionOrder.delete(existing[i].id);
+                  debugLog.push(`  🗑️ Deletado: ${existing[i].id}`);
+                } catch (err) {
+                  debugLog.push(`  ❌ Erro ao deletar: ${err.message}`);
+                }
+              }
+            }
             updatedCount++;
           } else {
             // Insere novo com campos obrigatórios
             debugLog.push(`🆕 Inserindo nova: ${opData.numeroOp}`);
-            debugLog.push(`🆕 Dados: unique_number=${opData.numeroOp?.toString()}, product=${opData.produtos?.[0]?.descricao || "—"}, order=${numPedido}`);
             await base44.asServiceRole.entities.ProductionOrder.create({
               unique_number: opData.numeroOp.toString(),
               order_id: numPedido.toString(),
