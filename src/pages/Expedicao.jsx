@@ -92,10 +92,11 @@ export default function Expedicao() {
 
   const advanceMutation = useMutation({
     mutationFn: async (po) => {
+      const currentStatus = po.expedicao_status || "aguardando_coleta";
       const updates = {};
-      if (po.expedicao_status === "aguardando_coleta") {
+      if (currentStatus === "aguardando_coleta") {
         updates.expedicao_status = "enviado";
-      } else if (po.expedicao_status === "enviado") {
+      } else if (currentStatus === "enviado") {
         updates.expedicao_status = "entregue";
         updates.status = "finalizado";
         updates.finished_at = new Date().toISOString();
@@ -108,6 +109,10 @@ export default function Expedicao() {
       queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
     },
   });
+
+  const handleAdvance = (po) => {
+    advanceMutation.mutate(po);
+  };
 
   const filtered = orders.filter(po =>
     !search ||
@@ -172,13 +177,13 @@ export default function Expedicao() {
                     </div>
                   ) : (
                     items.map(po => (
-                      <ExpedicaoCard
-                        key={po.id}
-                        po={po}
-                        onDetail={setDetailPO}
-                        onAdvance={col.key !== "entregue" ? advanceMutation.mutate : null}
-                      />
-                    ))
+                       <ExpedicaoCard
+                         key={po.id}
+                         po={po}
+                         onDetail={setDetailPO}
+                         onAdvance={col.key !== "entregue" ? handleAdvance : null}
+                       />
+                     ))
                   )}
                 </div>
               </div>
