@@ -232,10 +232,11 @@ export default function Production() {
       }
 
       const situacaoGeral = po.status === "planejamento" ? "P" : po.status === "em_producao" ? "A" : "F";
-      const numeroOpLimpo = numeroOp.replace(/^OP-/, "");
+      // Usar idiproc se disponível, senão usar unique_number
+      const numeroOpDisplay = po.idiproc || po.unique_number;
       
-      pedidosMap[numeroPedido][numeroOpLimpo] = {
-        numeroOp: numeroOpLimpo,
+      pedidosMap[numeroPedido][numeroOpDisplay] = {
+        numeroOp: numeroOpDisplay,
         numeroPedido: numeroPedido,
         situacaoGeral: situacaoGeral,
         produtos: [

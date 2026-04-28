@@ -2,6 +2,10 @@
   "name": "ProductionOrder",
   "type": "object",
   "properties": {
+    "idiproc": {
+      "type": "string",
+      "description": "ID do processo do Sankhya (n\u00famero da OP no padr\u00e3o Sankhya)"
+    },
     "unique_number": {
       "type": "string",
       "description": "N\u00famero \u00fanico da ordem de produ\u00e7\u00e3o"
