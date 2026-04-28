@@ -85,9 +85,13 @@ export default function Expedicao() {
         base44.entities.ProductionOrder.filter({ current_sector: "expedicao" }),
         base44.entities.ProductionOrder.list("-created_date", 500)
       ]);
+      const isSeparacaoOnly = (seq) => {
+        if (!seq || seq.length !== 1) return false;
+        const val = seq[0]?.toLowerCase().trim();
+        return val === "separacao" || val === "separação";
+      };
       const separacaoOnly = all.filter(po => 
-        po.production_sequence?.length === 1 && 
-        po.production_sequence[0] === "separacao" && 
+        isSeparacaoOnly(po.production_sequence) && 
         po.status !== "finalizado"
       );
       const combined = [...direct];
