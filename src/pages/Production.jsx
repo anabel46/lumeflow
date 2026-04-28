@@ -232,9 +232,10 @@ export default function Production() {
       }
 
       const situacaoGeral = po.status === "planejamento" ? "P" : po.status === "em_producao" ? "A" : "F";
+      const numeroOpLimpo = numeroOp.replace(/^OP-/, "");
       
-      pedidosMap[numeroPedido][numeroOp] = {
-        numeroOp: numeroOp,
+      pedidosMap[numeroPedido][numeroOpLimpo] = {
+        numeroOp: numeroOpLimpo,
         numeroPedido: numeroPedido,
         situacaoGeral: situacaoGeral,
         produtos: [
