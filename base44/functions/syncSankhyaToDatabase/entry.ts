@@ -149,10 +149,16 @@ Deno.serve(async (req) => {
 
           debugLog.push(`🔍 Resultado: encontrados=${existing?.length}, buscado=${opData.numeroOp?.toString()}`);
 
-          if (existing.length > 0) {
-            // Atualiza
+          // Se encontrou duplicatas, usar apenas o primeiro (ignorar os demais)
+          const record = existing?.[0] || null;
+
+          if (record) {
+            // Atualiza usando o primeiro registro encontrado
+            if (existing.length > 1) {
+              debugLog.push(`⚠️ Duplicatas detectadas: ${existing.length} registros para OP ${opData.numeroOp}. Usando apenas o primeiro.`);
+            }
             debugLog.push(`♻️ Atualizando: ${opData.numeroOp}`);
-            await base44.asServiceRole.entities.ProductionOrder.update(existing[0].id, {
+            await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
               status: mapearStatus(opData.situacaoGeral),
             });
             updatedCount++;
@@ -202,6 +208,76 @@ Deno.serve(async (req) => {
     }, { status: 500 });
   }
 });
+
+// ── Cleanup: Remove duplicatas ───────────────────────────────────────────────
+export async function removeDuplicateProductionOrders(req) {
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (user?.role !== 'admin') {
+      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
+    const debugLog = [];
+    debugLog.push("🧹 Iniciando limpeza de duplicatas...");
+
+    // Buscar todas as ProductionOrder
+    const allRecords = await base44.asServiceRole.entities.ProductionOrder.list("-updated_date", 1000);
+    debugLog.push(`📊 Total de registros encontrados: ${allRecords.length}`);
+
+    // Agrupar por unique_number
+    const grouped = {};
+    allRecords.forEach(record => {
+      const key = record.unique_number;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(record);
+    });
+
+    let deletedCount = 0;
+    const duplicateGroups = [];
+
+    // Para cada grupo com duplicatas, manter o mais recente e deletar os demais
+    for (const [uniqueNumber, records] of Object.entries(grouped)) {
+      if (records.length > 1) {
+        duplicateGroups.push({ uniqueNumber, count: records.length });
+        debugLog.push(`⚠️ OP ${uniqueNumber}: ${records.length} registros encontrados`);
+
+        // Ordenar por updated_date DESC (mais recente primeiro) e deletar os demais
+        const sorted = records.sort((a, b) => {
+          const dateA = new Date(a.updated_date || a.created_date).getTime();
+          const dateB = new Date(b.updated_date || b.created_date).getTime();
+          return dateB - dateA;
+        });
+
+        // Manter o primeiro (mais recente) e deletar os demais
+        for (let i = 1; i < sorted.length; i++) {
+          try {
+            await base44.asServiceRole.entities.ProductionOrder.delete(sorted[i].id);
+            deletedCount++;
+            debugLog.push(`  🗑️ Deletado: ${sorted[i].id} (${sorted[i].unique_number})`);
+          } catch (err) {
+            debugLog.push(`  ❌ Erro ao deletar ${sorted[i].id}: ${err.message}`);
+          }
+        }
+      }
+    }
+
+    debugLog.push(`✅ Limpeza concluída: ${deletedCount} duplicatas removidas de ${duplicateGroups.length} OPs`);
+
+    return Response.json({
+      success: true,
+      message: `Limpeza concluída: ${deletedCount} duplicatas removidas`,
+      duplicateGroups,
+      deleted: deletedCount,
+      debug: debugLog,
+    });
+  } catch (error) {
+    return Response.json({
+      success: false,
+      error: error.message,
+    }, { status: 500 });
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function converterParaMap(json) {
