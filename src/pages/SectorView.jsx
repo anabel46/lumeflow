@@ -462,7 +462,7 @@ export default function SectorView() {
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["sector-orders", sectorId],
     queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: sectorId }),
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   });
 
   const { data: allOrders = [] } = useQuery({
@@ -481,7 +481,7 @@ export default function SectorView() {
       );
       return results.filter(Boolean).filter(po => po.current_sector !== sectorId);
     },
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   });
 
   const invalidateAll = () => {
@@ -490,6 +490,7 @@ export default function SectorView() {
     queryClient.invalidateQueries({ queryKey: ["production-orders"] });
     queryClient.invalidateQueries({ queryKey: ["orders"] });
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
+    queryClient.invalidateQueries({ queryKey: ["expedicao-orders"] });
   };
 
   const handleStartClick = async (po) => {

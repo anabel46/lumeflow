@@ -81,7 +81,7 @@ export default function Expedicao() {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["expedicao-orders"],
     queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: "expedicao" }),
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   });
 
   const advanceMutation = useMutation({
@@ -94,7 +94,11 @@ export default function Expedicao() {
       }
       return base44.entities.ProductionOrder.update(po.id, updates);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expedicao-orders"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expedicao-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["sector-orders", "expedicao"] });
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+    },
   });
 
   const filtered = orders.filter(po =>
