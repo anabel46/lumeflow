@@ -461,7 +461,26 @@ export default function SectorView() {
 
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["sector-orders", sectorId],
-    queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: sectorId }),
+    queryFn: async () => {
+      if (sectorId === "expedicao") {
+        const [direct, all] = await Promise.all([
+          base44.entities.ProductionOrder.filter({ current_sector: "expedicao" }),
+          base44.entities.ProductionOrder.list("-created_date", 500)
+        ]);
+        const separacaoOnly = all.filter(po => {
+          const seq = po.production_sequence;
+          if (!seq || seq.length !== 1) return false;
+          const val = seq[0]?.toLowerCase().trim();
+          return (val === "separacao" || val === "separação") && po.status !== "finalizado";
+        });
+        const combined = [...direct];
+        separacaoOnly.forEach(po => {
+          if (!combined.some(d => d.id === po.id)) combined.push(po);
+        });
+        return combined;
+      }
+      return base44.entities.ProductionOrder.filter({ current_sector: sectorId });
+    },
     refetchInterval: 5000,
   });
 
