@@ -599,7 +599,12 @@ export default function SectorView() {
       console.log("[startMutation] SUCCESS");
       setReturnData(null); 
       setReturnIssueDialog(null); 
-      invalidateAll(); 
+      queryClient.invalidateQueries({ queryKey: ["sector-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["sector-orders", sectorId] });
+      queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["expedicao-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["sector-passed-orders", sectorId] });
+      invalidateAll();
     },
     onError: (error) => {
       console.error("[startMutation] ERRO:", error);
@@ -682,6 +687,11 @@ export default function SectorView() {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sector-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["sector-orders", sectorId] });
+      queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["expedicao-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["sector-passed-orders", sectorId] });
       invalidateAll();
       setCompleting(null);
       setCompletionForm({ observations: "", changes: "", operator: "" });
