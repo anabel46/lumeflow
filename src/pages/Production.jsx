@@ -19,28 +19,21 @@ import { useProductionSync } from "@/hooks/useProductionSync";
 import { useSectorProductionIntegration } from "@/hooks/useSectorProductionIntegration";
 
 const STATUS_TABS = [
-  { value: "all", label: "Ativos" },
+  { value: "all", label: "Todos" },
   { value: "P", label: "Planejamento" },
   { value: "A", label: "Em Produção" },
-  { value: "F", label: "Finalizados" },
+  { value: "F", label: "Finalizado" },
 ];
-
-// Helper para formatar número da OP (evita duplicação do prefixo)
-const formatOpNumber = (opNumber) => {
-  if (!opNumber) return "";
-  const str = String(opNumber).trim();
-  return str.startsWith("OP-") ? str : `OP-${str}`;
-};
 
 
 
 function PORow({ op, selected, onToggle, onStart, onPause, now }) {
   const produto = op.produtos?.[0];
-  const uniqueAtividades = op.atividades || [];
+  const uniqueAtividades = Array.from(new Map(op.atividades?.map(a => [a.descricao, a]) || []).values());
   const ativAtual = op.atividades?.find(a => a.situacao === "Em andamento") || op.atividades?.[0];
   const totalAtiv = uniqueAtividades.length || 0;
   const finalizadas = uniqueAtividades.filter(a => a.situacao === "Finalizada").length || 0;
-  const pct = op.progress || (totalAtiv > 0 ? Math.round((finalizadas / totalAtiv) * 100) : 0);
+  const pct = totalAtiv > 0 ? Math.round((finalizadas / totalAtiv) * 100) : 0;
 
   return (
     <div className={cn(
@@ -62,7 +55,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
       <div className="flex-1 min-w-0 space-y-1.5">
         {/* Header: OP + Referência + Produto */}
          <div className="flex items-center flex-wrap gap-2">
-           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">{formatOpNumber(op.numeroOp)}</span>
+           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.numeroOp}</span>
            {produto?.referencia && (
              <span className="text-sm font-semibold text-blue-600">{produto.referencia}</span>
            )}
@@ -83,7 +76,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
         {/* Etapas de produção - Kanban style */}
         {op.atividades && op.atividades.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
-            {op.atividades.map((ativ, idx) => (
+            {Array.from(new Map(op.atividades.map(a => [a.descricao, a])).values()).map((ativ, idx) => (
               <Badge
                 key={idx}
                 variant="outline"
@@ -96,7 +89,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
                     : "bg-amber-50 text-amber-700 border-amber-200"
                 )}
               >
-                {ativ.descricao.substring(0, 12)}
+                {ativ.descricao}
               </Badge>
             ))}
           </div>
@@ -224,67 +217,36 @@ export default function Production() {
   // Sincronizar atualizações da tela de Setores com Produção
   useSectorProductionIntegration();
 
-  // Fetch from ProductionOrder entity (não Sankhya) para refletir mudanças em tempo real
-  const { data: productionOrders = [], isLoading } = useQuery({
-    queryKey: ["production-orders"],
-    queryFn: () => base44.entities.ProductionOrder.list("-created_date", 500),
+  // Fetch structured data from getDashboard API
+  const { data: apiData = {}, isLoading, error } = useQuery({
+    queryKey: ["dashboard-sankhya"],
+    queryFn: async () => {
+      const response = await base44.functions.invoke("getDashboard", {});
+      return response.data;
+    },
     staleTime: 0,
     gcTime: 0,
     refetchInterval: 15000,
   });
 
-  // Group by order number
-  const groupedData = useMemo(() => {
-    const grouped = {};
-    productionOrders.forEach(po => {
-      const orderNum = po.order_number;
-      if (!grouped[orderNum]) {
-        grouped[orderNum] = [];
-      }
-      grouped[orderNum].push(po);
-    });
-    return grouped;
-  }, [productionOrders]);
+  const pedidos = apiData?.pedidos || {};
+  const estatisticas = apiData?.estatisticas || {};
 
-  // Calculate statistics
-  const estatisticas = useMemo(() => {
-    return {
-      totalOps: productionOrders.length,
-      aguardando: productionOrders.filter(po => po.status === 'planejamento').length,
-      emAndamento: productionOrders.filter(po => po.status === 'em_producao').length,
-      finalizadas: productionOrders.filter(po => po.status === 'finalizado').length,
-    };
-  }, [productionOrders]);
-
-  // Map ProductionOrder to legacy format for compatibility
+  // Flatten OPs for filtering
   const allOps = useMemo(() => {
-    return productionOrders.map(po => {
-      const progress = po.current_step_index ? Math.round((po.current_step_index / (po.production_sequence?.length || 1)) * 100) : 0;
-      return {
-        numeroOp: po.unique_number,
-        numeroPedido: parseInt(po.order_number),
-        situacaoGeral: po.status === 'finalizado' ? 'F' : po.status === 'em_producao' ? 'A' : 'P',
-        status: po.status,
-        produtos: [{ descricao: po.product_name, referencia: po.reference }],
-        atividades: po.production_sequence?.map((sector, idx) => ({
-          descricao: sector,
-          situacao: idx < (po.current_step_index || 0) ? 'Finalizada' : idx === (po.current_step_index || 0) ? 'Em andamento' : 'Aguardando',
-        })) || [],
-        progress,
-        poId: po.id,
-      };
+    const ops = [];
+    Object.entries(pedidos).forEach(([numPedido, opsMap]) => {
+      Object.values(opsMap).forEach(op => {
+        ops.push({ ...op, numeroPedido: parseInt(numPedido) });
+      });
     });
-  }, [productionOrders]);
+    return ops;
+  }, [pedidos]);
 
-  // Filter OPs - IMPORTANTE: não excluir por status de etapa, apenas por status global
+  // Filter OPs
   const filteredOps = useMemo(() => {
     return allOps.filter(op => {
-      // Apenas filtrar por status global FINAL - excluir apenas se status === "Finalizado"
-      if (statusFilter === "F" && op.situacaoGeral !== "F") return false;
-      if (statusFilter === "P" && op.situacaoGeral !== "P") return false;
-      if (statusFilter === "A" && op.situacaoGeral !== "A") return false;
-      // "all" mostra tudo exceto finalizados
-      if (statusFilter === "all" && op.situacaoGeral === "F") return false;
+      if (statusFilter !== "all" && op.situacaoGeral !== statusFilter) return false;
       
       if (search) {
         const s = search.toLowerCase();
@@ -519,22 +481,26 @@ export default function Production() {
                       className="w-4 h-4"
                     />
                   </td>
-                  <td className="p-3 font-mono font-bold text-primary">{formatOpNumber(op.numeroOp)}</td>
+                  <td className="p-3 font-mono font-bold text-primary">OP-{op.numeroOp}</td>
                   <td className="p-3 font-medium">
                     <div className="truncate">{op.produtos?.[0]?.descricao}</div>
                     {op.produtos?.[0]?.referencia && <div className="text-[10px] text-muted-foreground">{op.produtos[0].referencia}</div>}
                   </td>
                   <td className="p-3 font-semibold">#{op.numeroPedido}</td>
-                  <td className="p-3 text-center text-sm text-muted-foreground">{op.atividades?.find(a => a.situacao === "Em andamento")?.descricao?.substring(0, 15) || "—"}</td>
+                  <td className="p-3 text-center text-sm">{op.atividades?.find(a => a.situacao === "Em andamento")?.descricao || op.atividades?.[0]?.descricao || "—"}</td>
                   <td className="p-3">
                     <div className="flex items-center gap-1">
                       <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
                         <div
                           className={cn("h-full rounded-full", op.situacaoGeral === "F" ? "bg-emerald-500" : "bg-primary")}
-                          style={{ width: `${op.progress || 0}%` }}
+                          style={{
+                            width: `${op.situacaoGeral === "F" ? 100 : op.atividades?.length > 0 ? Math.round((op.atividades.filter((a, i, arr) => a.situacao === "Finalizada" && arr.findIndex(x => x.descricao === a.descricao) === i).length / Array.from(new Map(op.atividades.map(a => [a.descricao, a])).values()).length) * 100) : 0}%`
+                          }}
                         />
                       </div>
-                      <span className="text-[9px] w-8 text-right">{op.progress || 0}%</span>
+                      <span className="text-[9px] w-8 text-right">
+                        {op.situacaoGeral === "F" ? 100 : op.atividades?.length > 0 ? Math.round((op.atividades.filter((a, i, arr) => a.situacao === "Finalizada" && arr.findIndex(x => x.descricao === a.descricao) === i).length / Array.from(new Map(op.atividades.map(a => [a.descricao, a])).values()).length) * 100) : 0}%
+                      </span>
                     </div>
                   </td>
                   <td className="p-3 text-center">
