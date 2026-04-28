@@ -488,6 +488,7 @@ export default function SectorView() {
     queryClient.invalidateQueries({ queryKey: ["sector-orders", sectorId] });
     queryClient.invalidateQueries({ queryKey: ["sector-passed-orders", sectorId] });
     queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
     queryClient.invalidateQueries({ queryKey: ["orders"] });
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
     queryClient.invalidateQueries({ queryKey: ["expedicao-orders"] });
@@ -565,7 +566,6 @@ export default function SectorView() {
         started_at: new Date().toISOString(), timestamp: new Date().toISOString(),
       });
       const updateData = {
-        sector_status: "em_producao",
         sector_started_at: new Date().toISOString(),
         status: "em_producao",
         started_at: po.started_at || new Date().toISOString(),
@@ -610,7 +610,6 @@ export default function SectorView() {
         if ((qcChecks.overall_result === "reprovado" || qcChecks.overall_result === "retrabalho") && correction_sector) {
           return base44.entities.ProductionOrder.update(po.id, {
             current_sector: correction_sector,
-            sector_status: "aguardando",
             sector_started_at: null,
             status: "em_producao",
           });
@@ -624,9 +623,9 @@ export default function SectorView() {
         }
         return base44.entities.ProductionOrder.update(po.id, {
           current_sector: nextSector,
-          sector_status: "aguardando",
           sector_started_at: null,
           current_step_index: (po.current_step_index || 0) + 1,
+          status: "em_producao",
         });
       }
 
@@ -634,9 +633,9 @@ export default function SectorView() {
       if (isMesa) {
         return base44.entities.ProductionOrder.update(po.id, {
           current_sector: "agendamento",
-          sector_status: "aguardando",
           sector_started_at: null,
           current_step_index: (po.current_step_index || 0) + 1,
+          status: "em_producao",
         });
       }
 
@@ -646,14 +645,14 @@ export default function SectorView() {
       if (nextIndex >= sequence.length) {
         return base44.entities.ProductionOrder.update(po.id, {
           current_step_index: nextIndex, current_sector: "",
-          sector_status: "concluido", status: "finalizado", finished_at: finishedAt,
+          status: "finalizado", finished_at: finishedAt,
         });
       } else {
         return base44.entities.ProductionOrder.update(po.id, {
           current_step_index: nextIndex,
           current_sector: sequence[nextIndex],
-          sector_status: "aguardando",
           sector_started_at: null,
+          status: "em_producao",
         });
       }
     },
