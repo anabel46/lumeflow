@@ -80,7 +80,24 @@ export default function Expedicao() {
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["expedicao-orders"],
-    queryFn: () => base44.entities.ProductionOrder.filter({ current_sector: "expedicao" }),
+    queryFn: async () => {
+      const [direct, all] = await Promise.all([
+        base44.entities.ProductionOrder.filter({ current_sector: "expedicao" }),
+        base44.entities.ProductionOrder.list("-created_date", 500)
+      ]);
+      const separacaoOnly = all.filter(po => 
+        po.production_sequence?.length === 1 && 
+        po.production_sequence[0] === "separacao" && 
+        po.status !== "finalizado"
+      );
+      const combined = [...direct];
+      separacaoOnly.forEach(po => {
+        if (!combined.some(d => d.id === po.id)) {
+          combined.push(po);
+        }
+      });
+      return combined;
+    },
     refetchInterval: 5000,
   });
 
