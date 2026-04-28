@@ -495,19 +495,33 @@ export default function SectorView() {
   };
 
   const handleStartClick = async (po) => {
+    console.log("[INICIAR] po recebido:", po.id, po.unique_number);
     const parentOrder = allOrders.find(o => o.id === po.order_id);
+    console.log("[INICIAR] parentOrder:", parentOrder?.status);
     if (parentOrder?.status === "aprovacao_pendente") {
+      console.log("[INICIAR] BLOQUEADO: aprovação pendente");
       alert(`O pedido #${po.order_number} ainda está aguardando aprovação do gerente.`);
       return;
     }
     if ((po.current_step_index || 0) > 0) {
+      console.log("[INICIAR] BLOQUEADO: current_step_index =", po.current_step_index);
       setReturnIssueDialog(po);
       return;
     }
-    if (stockItems.length === 0) { startMutation.mutate(po); return; }
+    if (stockItems.length === 0) { 
+      console.log("[INICIAR] Sem stockItems, chamando startMutation");
+      startMutation.mutate(po); 
+      return; 
+    }
     const product = await base44.entities.Product.filter({ id: po.product_id }).then(r => r?.[0]).catch(() => null);
+    console.log("[INICIAR] product:", product?.name || "não encontrado");
     const components = product?.components || [];
-    if (components.length === 0) { startMutation.mutate(po); return; }
+    console.log("[INICIAR] components.length:", components.length);
+    if (components.length === 0) { 
+      console.log("[INICIAR] Sem componentes, chamando startMutation");
+      startMutation.mutate(po); 
+      return; 
+    }
 
     const deductions = components.map(comp => {
       const stockItem = stockItems.find(s => s.code === comp.reference || s.name?.toLowerCase() === comp.name?.toLowerCase());
@@ -560,11 +574,13 @@ export default function SectorView() {
 
   const startMutation = useMutation({
     mutationFn: async (po) => {
+      console.log("[startMutation] Executando para po.id:", po.id);
       await base44.entities.SectorLog.create({
         production_order_id: po.id, unique_number: po.unique_number,
         sector: sectorId, action: "entrada",
         started_at: new Date().toISOString(), timestamp: new Date().toISOString(),
       });
+      console.log("[startMutation] SectorLog criado");
       const updateData = {
         sector_started_at: new Date().toISOString(),
         status: "em_producao",
@@ -576,9 +592,18 @@ export default function SectorView() {
           from_sector: SECTOR_LABELS[po.production_sequence?.[po.current_step_index - 1]] || null,
         };
       }
+      console.log("[startMutation] Atualizando ProductionOrder com:", updateData);
       return base44.entities.ProductionOrder.update(po.id, updateData);
     },
-    onSuccess: () => { setReturnData(null); setReturnIssueDialog(null); invalidateAll(); },
+    onSuccess: () => { 
+      console.log("[startMutation] SUCCESS");
+      setReturnData(null); 
+      setReturnIssueDialog(null); 
+      invalidateAll(); 
+    },
+    onError: (error) => {
+      console.error("[startMutation] ERRO:", error);
+    },
   });
 
   const completeMutation = useMutation({
