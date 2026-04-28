@@ -138,18 +138,28 @@ Deno.serve(async (req) => {
       for (const [numOp, opData] of Object.entries(opsMap)) {
         try {
           // Tenta buscar a OP já existente
+          console.log("🔍 Verificando OP:", opData.numeroOp?.toString());
+
           const existing = await base44.asServiceRole.entities.ProductionOrder.filter({
             unique_number: opData.numeroOp.toString(),
           });
 
+          console.log("🔍 Resultado busca:", {
+            uniqueNumberBuscado: opData.numeroOp?.toString(),
+            encontrados: existing?.length,
+            primeiroId: existing?.[0]?.id,
+          });
+
           if (existing.length > 0) {
             // Atualiza
+            console.log("♻️ OP já existe, atualizando:", opData.numeroOp);
             await base44.asServiceRole.entities.ProductionOrder.update(existing[0].id, {
               status: mapearStatus(opData.situacaoGeral),
             });
             updatedCount++;
           } else {
             // Insere novo com campos obrigatórios
+            console.log("🆕 OP nova detectada, deveria inserir:", opData.numeroOp);
             console.log("🆕 Tentando inserir OP nova:", {
               unique_number: opData.numeroOp?.toString(),
               product_name: opData.produtos?.[0]?.descricao || "—",
