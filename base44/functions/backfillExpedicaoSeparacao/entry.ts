@@ -9,23 +9,27 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    // Buscar todas as OPs ativas
-    const allOps = await base44.asServiceRole.entities.ProductionOrder.list();
+    // Buscar TODAS as OPs sem limite
+    const allOps = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 9999);
 
-    let processados = 0;
-    let duplicados = 0;
-    let pulados = 0;
+    let verificadas = 0;
+    let duplicadas = 0;
+    let jaExistem = 0;
+    let puladas = 0;
     const erros = [];
+    const adicionadas = [];
 
     for (const op of allOps) {
       try {
-        // Validar condições
+        verificadas++;
+
+        // Validar condições de status
         if (op.status === 'finalizado' || op.status === 'cancelado') {
-          pulados++;
+          puladas++;
           continue;
         }
 
-        // Verificar se tem APENAS SEPARACAO
+        // Verificar se tem APENAS "SEPARACAO" na production_sequence
         const hasOnlySeparacao = 
           op.production_sequence && 
           Array.isArray(op.production_sequence) &&
@@ -33,7 +37,7 @@ Deno.serve(async (req) => {
           op.production_sequence[0].toUpperCase() === "SEPARACAO";
 
         if (!hasOnlySeparacao) {
-          pulados++;
+          puladas++;
           continue;
         }
 
@@ -44,7 +48,7 @@ Deno.serve(async (req) => {
         });
 
         if (existingDuplicate.length > 0) {
-          duplicados++;
+          jaExistem++;
           continue;
         }
 
@@ -84,7 +88,14 @@ Deno.serve(async (req) => {
           expedicao_status: "aguardando_coleta"
         }).catch(() => null);
         
-        processados++;
+        adicionadas.push({
+          pedido: op.order_number,
+          op: op.unique_number,
+          produto: op.product_name,
+          quantidade: op.quantity
+        });
+        
+        duplicadas++;
       } catch (error) {
         erros.push({
           op_id: op.id,
@@ -97,10 +108,12 @@ Deno.serve(async (req) => {
     return Response.json({
       status: 'success',
       summary: {
-        total_processados: processados,
-        ja_existentes: duplicados,
-        pulados: pulados,
+        total_verificadas: verificadas,
+        total_duplicadas: duplicadas,
+        ja_existentes: jaExistem,
+        puladas: puladas,
         erros: erros.length,
+        ops_adicionadas: adicionadas,
         erros_detalhes: erros.length > 0 ? erros : null
       }
     });
