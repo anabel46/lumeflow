@@ -503,6 +503,14 @@ export default function SectorView() {
       alert(`O pedido #${po.order_number} ainda está aguardando aprovação do gerente.`);
       return;
     }
+    
+    // Expedição não tem verificação de retorno
+    if (sectorId === "expedicao") {
+      console.log("[INICIAR] Expedição: pulando verificação de retorno");
+      startMutation.mutate(po);
+      return;
+    }
+
     if ((po.current_step_index || 0) > 0) {
       console.log("[INICIAR] BLOQUEADO: current_step_index =", po.current_step_index);
       setReturnIssueDialog(po);
