@@ -254,7 +254,7 @@ export default function Production() {
     return productionOrders.map(po => {
       const progress = po.current_step_index ? Math.round((po.current_step_index / (po.production_sequence?.length || 1)) * 100) : 0;
       return {
-        numeroOp: po.id,
+        numeroOp: po.unique_number,
         numeroPedido: parseInt(po.order_number),
         situacaoGeral: po.status === 'finalizado' ? 'F' : po.status === 'em_producao' ? 'A' : 'P',
         status: po.status,
@@ -264,6 +264,7 @@ export default function Production() {
           situacao: idx < (po.current_step_index || 0) ? 'Finalizada' : idx === (po.current_step_index || 0) ? 'Em andamento' : 'Aguardando',
         })) || [],
         progress,
+        poId: po.id,
       };
     });
   }, [productionOrders]);
@@ -300,7 +301,7 @@ export default function Production() {
       if (!grouped[op.numeroPedido]) {
         grouped[op.numeroPedido] = {};
       }
-      grouped[op.numeroPedido][op.id] = op;
+      grouped[op.numeroPedido][op.numeroOp] = op;
     });
     return Object.entries(grouped);
   }, [filteredOps]);
