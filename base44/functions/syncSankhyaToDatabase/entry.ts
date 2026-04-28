@@ -103,10 +103,12 @@ ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
 // ── Sync Function ───────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
+    const debugLog = [];
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
 
     // Pode ser invocado via automation (sem user) ou manualmente
+    debugLog.push("🔄 Iniciando sincronização Sankhya → Base44...");
     console.log("🔄 Iniciando sincronização Sankhya → Base44...", new Date().toISOString());
 
     // 1. Busca dados do Sankhya
@@ -128,6 +130,7 @@ Deno.serve(async (req) => {
     }
 
     const pedidosMap = converterParaMap(json);
+    debugLog.push(`✅ Sankhya retornou: ${Object.keys(pedidosMap).length} pedidos`);
     console.log("✅ Sankhya retornou:", Object.keys(pedidosMap).length, "pedidos");
 
     // 2. Sincroniza para ProductionOrder (usar service role para inserir)
@@ -138,34 +141,25 @@ Deno.serve(async (req) => {
       for (const [numOp, opData] of Object.entries(opsMap)) {
         try {
           // Tenta buscar a OP já existente
-          console.log("🔍 Verificando OP:", opData.numeroOp?.toString());
+          debugLog.push(`🔍 Verificando OP: ${opData.numeroOp?.toString()}`);
 
           const existing = await base44.asServiceRole.entities.ProductionOrder.filter({
             unique_number: opData.numeroOp.toString(),
           });
 
-          console.log("🔍 Resultado busca:", {
-            uniqueNumberBuscado: opData.numeroOp?.toString(),
-            encontrados: existing?.length,
-            primeiroId: existing?.[0]?.id,
-          });
+          debugLog.push(`🔍 Resultado: encontrados=${existing?.length}, buscado=${opData.numeroOp?.toString()}`);
 
           if (existing.length > 0) {
             // Atualiza
-            console.log("♻️ OP já existe, atualizando:", opData.numeroOp);
+            debugLog.push(`♻️ Atualizando: ${opData.numeroOp}`);
             await base44.asServiceRole.entities.ProductionOrder.update(existing[0].id, {
               status: mapearStatus(opData.situacaoGeral),
             });
             updatedCount++;
           } else {
             // Insere novo com campos obrigatórios
-            console.log("🆕 OP nova detectada, deveria inserir:", opData.numeroOp);
-            console.log("🆕 Tentando inserir OP nova:", {
-              unique_number: opData.numeroOp?.toString(),
-              product_name: opData.produtos?.[0]?.descricao || "—",
-              order_number: numPedido.toString(),
-              status: mapearStatus(opData.situacaoGeral),
-            });
+            debugLog.push(`🆕 Inserindo nova: ${opData.numeroOp}`);
+            debugLog.push(`🆕 Dados: unique_number=${opData.numeroOp?.toString()}, product=${opData.produtos?.[0]?.descricao || "—"}, order=${numPedido}`);
             await base44.asServiceRole.entities.ProductionOrder.create({
               unique_number: opData.numeroOp.toString(),
               order_id: numPedido.toString(),
@@ -191,13 +185,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`📊 Sincronização concluída: ${insertedCount} inseridas, ${updatedCount} atualizadas`);
+    debugLog.push(`📊 Sincronização concluída: ${insertedCount} inseridas, ${updatedCount} atualizadas`);
 
     return Response.json({
       success: true,
       message: `Sincronização concluída: ${insertedCount} inseridas, ${updatedCount} atualizadas`,
       inserted: insertedCount,
       updated: updatedCount,
+      debug: debugLog.slice(0, 100),
     });
   } catch (error) {
     console.error("❌ Erro na sincronização:", error.message);
