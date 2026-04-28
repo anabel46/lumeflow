@@ -237,6 +237,7 @@ export default function Production() {
       const numeroOpDisplay = po.idiproc || po.unique_number;
       
       pedidosMap[numeroPedido][numeroOpDisplay] = {
+        id: po.id,
         numeroOp: numeroOpDisplay,
         numeroPedido: numeroPedido,
         situacaoGeral: situacaoGeral,
@@ -479,18 +480,12 @@ export default function Production() {
               selectedIds={selectedIds}
               onToggle={toggleSelect}
               onStart={async (op) => {
-                const poRecord = productionOrders.find(po => po.unique_number === op.numeroOp);
-                if (poRecord) {
-                  await base44.entities.ProductionOrder.update(poRecord.id, { status: "em_producao" });
-                  queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
-                }
+                await base44.entities.ProductionOrder.update(op.id, { status: "em_producao" });
+                queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
               }}
               onPause={async (op) => {
-                const poRecord = productionOrders.find(po => po.unique_number === op.numeroOp);
-                if (poRecord) {
-                  await base44.entities.ProductionOrder.update(poRecord.id, { status: "pausado" });
-                  queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
-                }
+                await base44.entities.ProductionOrder.update(op.id, { status: "pausado" });
+                queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
               }}
               onSelectAll={handleSelectAll}
               now={now}
