@@ -150,6 +150,12 @@ Deno.serve(async (req) => {
             updatedCount++;
           } else {
             // Insere novo com campos obrigatórios
+            console.log("🆕 Tentando inserir OP nova:", {
+              unique_number: opData.numeroOp?.toString(),
+              product_name: opData.produtos?.[0]?.descricao || "—",
+              order_number: numPedido.toString(),
+              status: mapearStatus(opData.situacaoGeral),
+            });
             await base44.asServiceRole.entities.ProductionOrder.create({
               unique_number: opData.numeroOp.toString(),
               order_id: numPedido.toString(),
@@ -160,8 +166,17 @@ Deno.serve(async (req) => {
             });
             insertedCount++;
           }
-        } catch (e) {
-          console.error(`❌ Erro ao sync OP #${opData.numeroOp}:`, e.message);
+        } catch (err) {
+          console.error("❌ Erro ao sync OP:", {
+            error: err?.message || err,
+            uniqueNumber: opData?.numeroOp,
+            numeroPedido: numPedido,
+            dadosTentados: {
+              unique_number: opData?.numeroOp?.toString(),
+              product_name: opData?.produtos?.[0]?.descricao,
+              order_number: numPedido?.toString(),
+            },
+          });
         }
       }
     }
