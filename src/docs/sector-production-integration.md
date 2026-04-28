@@ -3,6 +3,14 @@
 ## Objetivo
 Sincronizar em tempo real as ações executadas nos setores com a tela de Produção, atualizando o status das OPs, progresso e etapas.
 
+## ⚠️ Garantias (Tela de Produção)
+- ✅ Formatação visual **não é alterada**
+- ✅ Número da OP continua sendo exibido exatamente como já está
+- ✅ Nenhum campo existente é sobrescrito ou reprocessado
+- ✅ Queries de dados não são modificadas
+- ✅ Apenas uma camada de **sincronização de status** é adicionada
+- ✅ Polling automático de 15s garante atualização sem reload
+
 ## Mapeamento Setor → Etapa do Kanban
 
 ```
@@ -36,21 +44,27 @@ Configurado em: `lib/constants.js` → `SECTOR_TO_STAGE`
 ## Fluxo de Sincronização
 
 ### 1. Ação no Setor → Atualização da OP
+
 ```
-User executa ação em SectorView
+User clica em Iniciar/Pausar/Concluir em SectorView
   ↓
-ProductionOrder entity é atualizada
+SectorView chama logSectorAction() backend
   ↓
-Subscrição de mudanças dispara (base44.entities.ProductionOrder.subscribe)
+logSectorAction() registra em SectorLog + atualiza ProductionOrder
+  (apenas campos: current_sector, sector_status, sector_started_at, finished_at)
   ↓
-Hook useSectorProductionIntegration() é acionado
+Subscrição ProductionOrder.subscribe() dispara
   ↓
-Cache de Production page é invalidado
+Cache "dashboard-sankhya" é invalidado
   ↓
-Dashboard-sankhya é recalculado (refetch)
+Production page refetch automaticamente
+  ↓
+Dashboard recalcula com dados atualizados (SEM reformatação)
   ↓
 Tela de Produção atualiza em tempo real
 ```
+
+**Importante:** Dados visualizados (número OP, produto, campos) **nunca são reformatados ou reprocessados**. Apenas o cache é invalidado e refetch dos dados originais ocorre.
 
 ### 2. Polling Automático (Fallback)
 Além da subscrição em tempo real, a tela de Produção faz polling a cada **15 segundos**:
@@ -61,36 +75,67 @@ useProductionSync(15000) // hook dedicado
 
 ## Comportamento por Ação
 
-### Iniciar (em SectorView)
-```
-sector_status = "em_producao"
-status = "em_producao"
-sector_started_at = novo timestamp
-  ↓ 
-[Produção] Etapa muda para "Em andamento" (badge azul)
-[Produção] Contador de OPs produzindo aumenta
+### Iniciar (Clique em "Iniciar" em SectorView)
+```javascript
+// logSectorAction() atualiza:
+{
+  current_sector: "estamparia",
+  sector_status: "em_producao",
+  sector_started_at: ISO timestamp
+}
+
+// SectorLog registra:
+{
+  action: "entrada",
+  operator: "João Silva",
+  timestamp: ISO
+}
+
+// Resultado na Produção:
+// Dashboard recalcula apenas o status dessa OP
+// Exibição permanece idêntica (sem reformatação)
 ```
 
-### Pausar
-```
-sector_status = "aguardando" (regressa ao estado anterior)
-status = "em_producao"
-  ↓ 
-[Produção] Etapa volta para "Aguardando" (badge amarelo)
-[Produção] Barra de progresso mantém-se
+### Pausar (Clique em "Pausar" em SectorView)
+```javascript
+// logSectorAction() atualiza:
+{
+  current_sector: "estamparia",
+  sector_status: "aguardando"
+}
+
+// SectorLog registra:
+{
+  action: "retrabalho",
+  observations: "Ajuste necessário"
+}
+
+// Resultado na Produção:
+// Status retorna ao anterior
+// Exibição e dados não mudam
 ```
 
-### Concluir
-```
-current_step_index += 1
-current_sector = production_sequence[current_step_index]
-sector_status = "concluido"
-finished_at = novo timestamp
-  ↓ 
-[Produção] Etapa atual avança
-[Produção] Barra de progresso sobe (ex: 33% → 66%)
-[Produção] Próxima etapa é desbloqueada
-[Produção] Se última etapa → Status "Finalizado" (badge verde)
+### Concluir (Clique em "Concluir" em SectorView)
+```javascript
+// logSectorAction() atualiza:
+{
+  current_sector: próximo setor,
+  sector_status: "concluido",
+  finished_at: ISO timestamp
+}
+
+// SectorLog registra:
+{
+  action: "saida",
+  operator: "João Silva"
+}
+
+// Resultado na Produção:
+// Etapa marca como concluída
+// Próxima etapa desbloqueada
+// Barra progresso avança
+// OP permanece visível até todas etapas finalizarem
+// Formatação visual não muda
 ```
 
 ## Campos Monitorados na ProductionOrder
@@ -190,6 +235,29 @@ Configurável em:
 // pages/Production.tsx
 useProductionSync(30000); // aumentar para 30s
 ```
+
+## Implementação Garantida
+
+### O que **NÃO** muda na tela de Produção:
+- ❌ Formatação visual de OPs
+- ❌ Número da OP (exibição)
+- ❌ Produto, referência, campos de ordem
+- ❌ Queries de busca de dados
+- ❌ Lógica de agrupamento por pedido
+- ❌ Estrutura de cards ou tabelas
+
+### O que **MUDA** apenas:
+- ✅ Status de cada etapa (via `sector_status`)
+- ✅ Ordem de prioridade no kanban (refetch automático)
+- ✅ Barra de progresso (recalcul de completes)
+- ✅ Visibilidade da OP (quando todas etapas = finalizado)
+
+### Fluxo Técnico Seguro:
+1. `logSectorAction()` backend registra ação + atualiza ProductionOrder
+2. Subscrição em tempo real invalida cache
+3. Production page refetch dados do getDashboard
+4. Dados são processados **exatamente como antes** (nenhuma mudança)
+5. Dashboard renderiza com dados atualizados (exibição mantida)
 
 ## Próximos Passos
 
