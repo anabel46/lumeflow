@@ -608,11 +608,12 @@ export default function SectorView() {
         started_at: new Date().toISOString(), timestamp: new Date().toISOString(),
       });
       console.log("[startMutation] SectorLog criado");
-      const updateData = {
-        sector_started_at: new Date().toISOString(),
-        status: "em_producao",
-        started_at: po.started_at || new Date().toISOString(),
-      };
+  const updateData = {
+  sector_started_at: new Date().toISOString(),
+  status: "em_producao",
+  sector_status: "em_producao",  // ← adicionar esta linha
+  started_at: po.started_at || new Date().toISOString(),
+  };
       if (returnData) {
         updateData.return_from_sector = {
           ...returnData,
