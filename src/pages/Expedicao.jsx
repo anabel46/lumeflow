@@ -84,11 +84,19 @@ export default function Expedicao() {
     refetchInterval: 5000,
   });
 
+  const { data: allProductionOrders = [] } = useQuery({
+    queryKey: ["productionOrders"],
+    queryFn: () => base44.entities.ProductionOrder.list("-created_date", 500),
+    refetchInterval: 10000,
+  });
+
   const advanceMutation = useMutation({
     mutationFn: async (po) => {
-      const next = po.expedicao_status === "aguardando_coleta" ? "enviado" : "entregue";
-      const updates = { expedicao_status: next };
-      if (next === "entregue") {
+      const updates = {};
+      if (po.expedicao_status === "aguardando_coleta") {
+        updates.expedicao_status = "enviado";
+      } else if (po.expedicao_status === "enviado") {
+        updates.expedicao_status = "entregue";
         updates.status = "finalizado";
         updates.finished_at = new Date().toISOString();
       }
@@ -97,7 +105,7 @@ export default function Expedicao() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expedicao-orders"] });
       queryClient.invalidateQueries({ queryKey: ["sector-orders", "expedicao"] });
-      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
     },
   });
 
