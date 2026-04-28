@@ -209,19 +209,57 @@ export default function Production() {
   const queryClient = useQueryClient();
   const now = new Date();
 
-  // Fetch structured data from getDashboard API
-  const { data: apiData = {}, isLoading, error } = useQuery({
-    queryKey: ["dashboard-sankhya"],
-    queryFn: async () => {
-      const response = await base44.functions.invoke("getDashboard", {});
-      return response.data;
-    },
-    staleTime: 0,
-    gcTime: 0,
+  // Fetch ProductionOrder from database
+  const { data: productionOrders = [], isLoading } = useQuery({
+    queryKey: ["productionOrders"],
+    queryFn: () => base44.entities.ProductionOrder.list("-created_date", 500),
   });
 
-  const pedidos = apiData?.pedidos || {};
-  const estatisticas = apiData?.estatisticas || {};
+  // Transform ProductionOrder to format expected by components
+  const { pedidos, estatisticas } = useMemo(() => {
+    const pedidosMap = {};
+    let totalOps = 0;
+    let aguardando = 0;
+    let emAndamento = 0;
+    let finalizadas = 0;
+
+    productionOrders.forEach(po => {
+      const numeroPedido = po.order_number;
+      const numeroOp = po.unique_number;
+      
+      if (!pedidosMap[numeroPedido]) {
+        pedidosMap[numeroPedido] = {};
+      }
+
+      const situacaoGeral = po.status === "planejamento" ? "P" : po.status === "em_producao" ? "A" : "F";
+      
+      pedidosMap[numeroPedido][numeroOp] = {
+        numeroOp: numeroOp,
+        numeroPedido: numeroPedido,
+        situacaoGeral: situacaoGeral,
+        produtos: [
+          {
+            descricao: po.product_name,
+            referencia: po.reference
+          }
+        ],
+        atividades: (po.production_sequence || []).map(setor => ({
+          descricao: setor,
+          situacao: setor === po.current_sector ? "Em andamento" : po.current_step_index > (po.production_sequence || []).indexOf(setor) ? "Finalizada" : "Aguardando"
+        }))
+      };
+
+      totalOps++;
+      if (situacaoGeral === "P") aguardando++;
+      else if (situacaoGeral === "A") emAndamento++;
+      else finalizadas++;
+    });
+
+    return {
+      pedidos: pedidosMap,
+      estatisticas: { totalOps, aguardando, emAndamento, finalizadas }
+    };
+  }, [productionOrders]);
 
   // Flatten OPs for filtering
   const allOps = useMemo(() => {
