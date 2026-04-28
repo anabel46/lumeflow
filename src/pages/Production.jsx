@@ -213,6 +213,7 @@ export default function Production() {
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["productionOrders"],
     queryFn: () => base44.entities.ProductionOrder.list("-created_date", 500),
+    refetchInterval: 10000,
   });
 
   // Transform ProductionOrder to format expected by components
@@ -306,15 +307,27 @@ export default function Production() {
     return Object.entries(grouped);
   }, [filteredOps]);
 
-  const handleBulkStart = () => {
+  const handleBulkStart = async () => {
     const toStart = allOps.filter(op => selectedIds.has(op.numeroOp) && op.situacaoGeral === "P");
-    toStart.forEach(op => console.log("Iniciar:", op.numeroOp));
+    for (const op of toStart) {
+      const poRecord = productionOrders.find(po => po.unique_number === op.numeroOp);
+      if (poRecord) {
+        await base44.entities.ProductionOrder.update(poRecord.id, { status: "em_producao" });
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
     setSelectedIds(new Set());
   };
 
-  const handleBulkPause = () => {
+  const handleBulkPause = async () => {
     const toPause = allOps.filter(op => selectedIds.has(op.numeroOp) && op.situacaoGeral === "A");
-    toPause.forEach(op => console.log("Pausar:", op.numeroOp));
+    for (const op of toPause) {
+      const poRecord = productionOrders.find(po => po.unique_number === op.numeroOp);
+      if (poRecord) {
+        await base44.entities.ProductionOrder.update(poRecord.id, { status: "pausado" });
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
     setSelectedIds(new Set());
   };
 
@@ -465,8 +478,20 @@ export default function Production() {
               ops={opsMap}
               selectedIds={selectedIds}
               onToggle={toggleSelect}
-              onStart={(op) => console.log("Iniciar:", op.numeroOp)}
-              onPause={(op) => console.log("Pausar:", op.numeroOp)}
+              onStart={async (op) => {
+                const poRecord = productionOrders.find(po => po.unique_number === op.numeroOp);
+                if (poRecord) {
+                  await base44.entities.ProductionOrder.update(poRecord.id, { status: "em_producao" });
+                  queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
+                }
+              }}
+              onPause={async (op) => {
+                const poRecord = productionOrders.find(po => po.unique_number === op.numeroOp);
+                if (poRecord) {
+                  await base44.entities.ProductionOrder.update(poRecord.id, { status: "pausado" });
+                  queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
+                }
+              }}
               onSelectAll={handleSelectAll}
               now={now}
             />
