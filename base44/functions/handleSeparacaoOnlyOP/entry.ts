@@ -60,8 +60,14 @@ Deno.serve(async (req) => {
           parent_order_id: po.parent_order_id,
         };
         
-        await base44.asServiceRole.entities.ProductionOrder.create(duplicateData);
-        return Response.json({ status: 'created', message: 'OP duplicada para Expedição' });
+        const created = await base44.asServiceRole.entities.ProductionOrder.create(duplicateData);
+        
+        // Atualizar OP original para marcar que há duplicata em expedição
+        await base44.asServiceRole.entities.ProductionOrder.update(po.id, { 
+          expedicao_status: "aguardando_coleta"
+        }).catch(() => null);
+        
+        return Response.json({ status: 'created', message: 'OP duplicada para Expedição', duplicate_id: created?.id });
       }
     }
 

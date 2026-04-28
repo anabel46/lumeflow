@@ -74,9 +74,16 @@ Deno.serve(async (req) => {
           delivery_deadline: op.delivery_deadline,
           is_intermediate: op.is_intermediate || false,
           parent_order_id: op.parent_order_id,
+          expedicao_status: "aguardando_coleta",
         };
 
         await base44.asServiceRole.entities.ProductionOrder.create(duplicateData);
+        
+        // Marcar OP original com status de expedição
+        await base44.asServiceRole.entities.ProductionOrder.update(op.id, {
+          expedicao_status: "aguardando_coleta"
+        }).catch(() => null);
+        
         processados++;
       } catch (error) {
         erros.push({
