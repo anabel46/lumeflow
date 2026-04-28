@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
           op.production_sequence && 
           Array.isArray(op.production_sequence) &&
           op.production_sequence.length === 1 &&
-          op.production_sequence[0].toUpperCase() === "SEPARACAO";
+          op.production_sequence[0] === "SEPARACAO";
 
         if (!hasOnlySeparacao) {
           puladas++;
