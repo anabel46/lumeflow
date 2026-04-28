@@ -25,6 +25,13 @@ const STATUS_TABS = [
   { value: "F", label: "Finalizados" },
 ];
 
+// Helper para formatar número da OP (evita duplicação do prefixo)
+const formatOpNumber = (opNumber) => {
+  if (!opNumber) return "";
+  const str = String(opNumber).trim();
+  return str.startsWith("OP-") ? str : `OP-${str}`;
+};
+
 
 
 function PORow({ op, selected, onToggle, onStart, onPause, now }) {
@@ -55,7 +62,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
       <div className="flex-1 min-w-0 space-y-1.5">
         {/* Header: OP + Referência + Produto */}
          <div className="flex items-center flex-wrap gap-2">
-           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.numeroOp}</span>
+           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">{formatOpNumber(op.numeroOp)}</span>
            {produto?.referencia && (
              <span className="text-sm font-semibold text-blue-600">{produto.referencia}</span>
            )}
@@ -512,7 +519,7 @@ export default function Production() {
                       className="w-4 h-4"
                     />
                   </td>
-                  <td className="p-3 font-mono font-bold text-primary">OP-{op.numeroOp}</td>
+                  <td className="p-3 font-mono font-bold text-primary">{formatOpNumber(op.numeroOp)}</td>
                   <td className="p-3 font-medium">
                     <div className="truncate">{op.produtos?.[0]?.descricao}</div>
                     {op.produtos?.[0]?.referencia && <div className="text-[10px] text-muted-foreground">{op.produtos[0].referencia}</div>}
