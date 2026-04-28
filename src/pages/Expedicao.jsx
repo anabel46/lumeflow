@@ -65,7 +65,7 @@ function ExpedicaoCard({ po, onAdvance, onDetail }) {
 
       {onAdvance && (
         <Button size="sm" onClick={() => onAdvance(po)} className="w-full h-7 text-xs gap-1 mt-1">
-          {po.expedicao_status === "aguardando_coleta" && <><Send className="w-3 h-3" /> Marcar como Enviado</>}
+          {(po.expedicao_status === "aguardando_coleta" || !po.expedicao_status) && <><Send className="w-3 h-3" /> Marcar como Enviado</>}
           {po.expedicao_status === "enviado" && <><CheckCircle2 className="w-3 h-3" /> Marcar como Entregue</>}
         </Button>
       )}
