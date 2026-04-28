@@ -15,6 +15,8 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, SECTOR_LABELS } from "@/lib/constants";
 import { Link } from "react-router-dom";
+import { useProductionSync } from "@/hooks/useProductionSync";
+import { useSectorProductionIntegration } from "@/hooks/useSectorProductionIntegration";
 
 const STATUS_TABS = [
   { value: "all", label: "Todos" },
@@ -209,6 +211,12 @@ export default function Production() {
   const queryClient = useQueryClient();
   const now = new Date();
 
+  // Ativar sincronização automática com polling de 15s
+  useProductionSync(15000);
+  
+  // Sincronizar atualizações da tela de Setores com Produção
+  useSectorProductionIntegration();
+
   // Fetch structured data from getDashboard API
   const { data: apiData = {}, isLoading, error } = useQuery({
     queryKey: ["dashboard-sankhya"],
@@ -218,6 +226,7 @@ export default function Production() {
     },
     staleTime: 0,
     gcTime: 0,
+    refetchInterval: 15000,
   });
 
   const pedidos = apiData?.pedidos || {};

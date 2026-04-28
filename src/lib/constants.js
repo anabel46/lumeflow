@@ -64,3 +64,27 @@ export const STATUS_LABELS = {
   cancelado: "Cancelado",
   pausado: "Pausado",
 };
+
+// Mapeamento de Setor → Etapa (para sincronização Setores ↔ Produção)
+export const SECTOR_TO_STAGE = {
+  "estamparia": "ESTAMPARIA",
+  "tornearia": "TORNEARIA",
+  "corte": "CORTE",
+  "solda": "SOLDA",
+  "lixa": "LIXA",
+  "repuxo": "REPUXO",
+  "pintura": "PINTURA",
+  "montagem_decorativa": "MONTAGEM",
+  "montagem_eletrica": "MONTAGEM",
+  "montagem_perfil": "MONTAGEM",
+  "montagem_embutidos": "MONTAGEM",
+  "controle_qualidade": "CONTROLE_QUALIDADE",
+  "embalagem": "EMBALAGEM",
+  "mesa_barra": "ENTREGA",
+  "mesa_ipanema": "ENTREGA",
+  "mesa_sao_gabriel": "ENTREGA",
+  "mesa_vila_madalena": "ENTREGA",
+  "mesa_fabrica": "ENTREGA",
+  "agendamento": "AGENDAMENTO",
+  "expedicao": "SEPARACAO",
+};
