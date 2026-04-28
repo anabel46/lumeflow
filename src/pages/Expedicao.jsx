@@ -64,7 +64,12 @@ function ExpedicaoCard({ po, onAdvance, onDetail }) {
       )}
 
       {onAdvance && (
-        <Button size="sm" onClick={() => onAdvance(po)} className="w-full h-7 text-xs gap-1 mt-1">
+        <Button 
+          size="sm" 
+          onClick={() => onAdvance(po)} 
+          className="w-full h-7 text-xs gap-1 mt-1 pointer-events-auto"
+          type="button"
+        >
           {po.expedicao_status === "enviado" 
             ? <><CheckCircle2 className="w-3 h-3" /> Marcar como Entregue</>
             : <><Send className="w-3 h-3" /> Marcar como Enviado</>
