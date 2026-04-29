@@ -73,6 +73,7 @@ SELECT
     P.STATUSPROC       AS SITUACAO_GERAL,
     A.IDIATV,
     A.IDEFX,
+    FX.CODIGO          AS CODIGO_FX,
     FX.DESCRICAO       AS DESCRICAO_ATIVIDADE,
     A.DHINCLUSAO,
     A.DHACEITE,
@@ -164,6 +165,8 @@ function converterParaMap(fluxoJson, bomJson) {
       if (!ativ) {
         ativ = {
           id:        idAtiv,
+          idefx:     getString(row, idx, "IDEFX"),
+          codigoFx:  getString(row, idx, "CODIGO_FX"),
           descricao: getString(row, idx, "DESCRICAO_ATIVIDADE"),
           situacao:  getString(row, idx, "SITUACAO_ATIV"),
           dhAceite:  getString(row, idx, "DHACEITE"),
@@ -303,7 +306,6 @@ Deno.serve(async (req) => {
 
     if (String(fluxoRaw.status) !== "1") throw new Error(fluxoRaw.statusMessage);
 
-    // BOM pode não existir para todos os produtos — não quebra se falhar
     const bomSafe = String(bomRaw.status) === "1" ? bomRaw : { responseBody: null };
 
     const pedidosMap = converterParaMap(fluxoRaw, bomSafe);
