@@ -23,6 +23,14 @@ const STATUS_TABS = [
   { value: "F", label: "Finalizado" },
 ];
 
+function formatarEtapa(nome) {
+  if (!nome) return "";
+  return nome
+    .split("_")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 
 
 function PORow({ op, selected, onToggle, onStart, onPause, now }) {
@@ -53,7 +61,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
       <div className="flex-1 min-w-0 space-y-1.5">
         {/* Header: OP + Referência + Produto */}
          <div className="flex items-center flex-wrap gap-2">
-           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.numeroOp}</span>
+           <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded font-bold">OP-{op.idiproc || op.numeroOp}</span>
            {produto?.referencia && (
              <span className="text-sm font-semibold text-blue-600">{produto.referencia}</span>
            )}
@@ -87,7 +95,7 @@ function PORow({ op, selected, onToggle, onStart, onPause, now }) {
                     : "bg-amber-50 text-amber-700 border-amber-200"
                 )}
               >
-                {ativ.descricao}
+                {formatarEtapa(ativ.descricao)}
               </Badge>
             ))}
           </div>
@@ -243,6 +251,7 @@ export default function Production() {
       pedidosMap[numeroPedido][numeroOpDisplay] = {
         id: po.id,
         numeroOp: numeroOpDisplay,
+        idiproc: po.idiproc,
         numeroPedido: numeroPedido,
         situacaoGeral: situacaoGeral,
         produtos: [
@@ -536,13 +545,13 @@ export default function Production() {
                       className="w-4 h-4"
                     />
                   </td>
-                  <td className="p-3 font-mono font-bold text-primary">OP-{op.numeroOp}</td>
+                  <td className="p-3 font-mono font-bold text-primary">OP-{op.idiproc || op.numeroOp}</td>
                   <td className="p-3 font-medium">
                     <div className="truncate">{op.produtos?.[0]?.descricao}</div>
                     {op.produtos?.[0]?.referencia && <div className="text-[10px] text-muted-foreground">{op.produtos[0].referencia}</div>}
                   </td>
                   <td className="p-3 font-semibold">#{op.numeroPedido}</td>
-                  <td className="p-3 text-center text-sm">{op.atividades?.find(a => a.situacao === "Em andamento")?.descricao || op.atividades?.[0]?.descricao || "—"}</td>
+                  <td className="p-3 text-center text-sm">{formatarEtapa(op.atividades?.find(a => a.situacao === "Em andamento")?.descricao || op.atividades?.[0]?.descricao) || "—"}</td>
                   <td className="p-3">
                     <div className="flex items-center gap-1">
                       <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
