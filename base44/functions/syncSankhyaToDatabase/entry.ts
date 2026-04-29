@@ -82,15 +82,16 @@ const SQL_OPERACOES = `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
-    ITE.CODPROD,
-    PRO.DESCRPROD,
-    PRO.REFERENCIA
+    MIN(ITE.CODPROD) AS CODPROD,
+    MIN(PRO.DESCRPROD) AS DESCRPROD,
+    MIN(PRO.REFERENCIA) AS REFERENCIA
 FROM TPRIPROC P
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
 WHERE P.STATUSPROC IN ('A', 'P', 'F')
 AND P.IDIPROC >= ${OP_MINIMA}
+GROUP BY P.IDIPROC, P.STATUSPROC, CAB.NUMPEDIDO, P.NUNOTA
 ORDER BY P.IDIPROC ASC`;
 
 // ── Sync Function ───────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ Deno.serve(async (req) => {
       method: "POST",
       body: JSON.stringify({
         serviceName: "DbExplorerSP.executeQuery",
-        requestBody: { sql: SQL_OPERACOES, maxResults: 5000 },
+        requestBody: { sql: SQL_OPERACOES, maxResults: 50000 },
       }),
     });
 
