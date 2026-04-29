@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
     console.log(`📦 OPs Sankhya: ${opsSankhya.length}`);
 
     // ── Busca registros existentes no LumeFlow ────────────────────────────────
-    const existingRecords = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 9999);
+    const existingRecords = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 999);
     const existingByIdiproc = {};
     for (const rec of existingRecords) {
       const key = rec.idiproc || rec.unique_number;
