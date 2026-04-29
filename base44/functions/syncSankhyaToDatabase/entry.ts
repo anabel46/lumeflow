@@ -97,8 +97,8 @@ INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-WHERE P.STATUSPROC = 'A'
-ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
+WHERE P.STATUSPROC IN ('A', 'P', 'F')
+ORDER BY P.IDIPROC ASC, A.IDIATV ASC`;
 
 // ── Sync Function ───────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
       method: "POST",
       body: JSON.stringify({
         serviceName: "DbExplorerSP.executeQuery",
-        requestBody: { sql: SQL_OPERACOES },
+        requestBody: { sql: SQL_OPERACOES, maxResults: 99999 },
       }),
     });
 
