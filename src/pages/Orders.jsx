@@ -10,7 +10,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Eye, Filter, X, Ban, Trash2, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, Eye, Filter, X, Ban, Trash2, AlertTriangle, ChevronDown, ChevronUp, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, PURCHASE_LOCATIONS } from "@/lib/constants";
@@ -110,9 +110,16 @@ export default function Orders() {
           <h1 className="text-2xl font-bold">Pedidos</h1>
           <p className="text-sm text-muted-foreground">Gerenciar pedidos de clientes</p>
         </div>
-        <Button onClick={() => setShowForm(true)} className="gap-2">
-          <Plus className="w-4 h-4" /> Novo Pedido
-        </Button>
+        <div className="flex gap-2">
+          <Link to="/aprovacao-lote">
+            <Button variant="outline" className="gap-2">
+              <ShieldCheck className="w-4 h-4" /> Aprovação em Lote
+            </Button>
+          </Link>
+          <Button onClick={() => setShowForm(true)} className="gap-2">
+            <Plus className="w-4 h-4" /> Novo Pedido
+          </Button>
+        </div>
       </div>
 
       {/* Search + Filter Toggle */}

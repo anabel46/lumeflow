@@ -1,0 +1,107 @@
+{
+  "name": "Product",
+  "type": "object",
+  "properties": {
+    "reference": {
+      "type": "string",
+      "description": "C\u00f3digo de refer\u00eancia do produto"
+    },
+    "name": {
+      "type": "string",
+      "description": "Nome do produto"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "lustre",
+        "luminaria",
+        "pendente",
+        "arandela",
+        "plafon",
+        "spot",
+        "intermediario",
+        "outro"
+      ],
+      "description": "Categoria do produto"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descri\u00e7\u00e3o do produto"
+    },
+    "technical_drawing_url": {
+      "type": "string",
+      "description": "URL do desenho t\u00e9cnico em PDF"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "URL da imagem do produto"
+    },
+    "production_sequence": {
+      "type": "array",
+      "description": "Sequ\u00eancia de setores de produ\u00e7\u00e3o \u2014 pode repetir setores",
+      "items": {
+        "type": "string"
+      }
+    },
+    "components": {
+      "type": "array",
+      "description": "Materiais intermedi\u00e1rios (sub-pe\u00e7as) necess\u00e1rios para fabricar este produto",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quantity_per_unit": {
+            "type": "number",
+            "description": "Quantidade necess\u00e1ria por unidade do produto pai"
+          }
+        }
+      }
+    },
+    "raw_materials": {
+      "type": "array",
+      "description": "Composi\u00e7\u00e3o de mat\u00e9rias-primas f\u00edsicas necess\u00e1rias para fabricar o produto",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nome da mat\u00e9ria-prima"
+          },
+          "reference": {
+            "type": "string",
+            "description": "C\u00f3digo/refer\u00eancia da mat\u00e9ria-prima"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Quantidade necess\u00e1ria por unidade"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unidade de medida (un, m, kg, etc.)"
+          }
+        }
+      }
+    },
+    "estimated_time_minutes": {
+      "type": "number",
+      "description": "Tempo estimado de produ\u00e7\u00e3o em minutos"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "reference",
+    "name",
+    "production_sequence"
+  ]
+}

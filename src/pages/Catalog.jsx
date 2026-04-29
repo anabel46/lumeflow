@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Plus, Search, Pencil, Package } from "lucide-react";
 import { SECTORS, SECTOR_LABELS } from "@/lib/constants";
 import ComponentsSelector from "@/components/catalog/ComponentsSelector";
+import CompositionEditor from "@/components/catalog/CompositionEditor";
 
 const categoryLabels = {
   lustre: "Lustre", luminaria: "Luminária", pendente: "Pendente",
@@ -34,7 +35,7 @@ const categoryColors = {
 const emptyForm = {
   reference: "", name: "", category: "lustre", description: "",
   technical_drawing_url: "", image_url: "", production_sequence: [],
-  estimated_time_minutes: 0, components: [],
+  estimated_time_minutes: 0, components: [], raw_materials: [],
 };
 
 export default function Catalog() {
@@ -57,7 +58,7 @@ export default function Catalog() {
   };
 
   const openEdit = (p) => {
-    setForm({ ...emptyForm, ...p, components: p.components || [] });
+    setForm({ ...emptyForm, ...p, components: p.components || [], raw_materials: p.raw_materials || [] });
     setEditing(p);
     setShowForm(true);
   };
@@ -142,6 +143,23 @@ export default function Catalog() {
                 <div key={i} className="flex items-center justify-between text-xs">
                   <span className="text-foreground truncate">{c.name} <span className="text-muted-foreground">({c.reference})</span></span>
                   <span className="text-muted-foreground ml-2 shrink-0">×{c.quantity_per_unit}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {product.raw_materials?.length > 0 && (
+          <div className="mt-3 pt-3 border-t">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 text-orange-600">Composição / Matéria-Prima</p>
+            <div className="space-y-1">
+              {product.raw_materials.map((m, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className="text-foreground truncate">
+                    {m.name}
+                    {m.reference && <span className="text-muted-foreground ml-1">({m.reference})</span>}
+                  </span>
+                  <span className="text-muted-foreground ml-2 shrink-0 font-medium">{m.quantity} {m.unit || "un"}</span>
                 </div>
               ))}
             </div>
@@ -269,6 +287,18 @@ export default function Catalog() {
                 products={products}
                 value={form.components || []}
                 onChange={(components) => setForm(p => ({ ...p, components }))}
+              />
+            </div>
+
+            {/* Raw Materials / Composition */}
+            <div>
+              <Label>Composição — Matéria-Prima</Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                Materiais físicos necessários para fabricar este produto (chapas, perfis, componentes elétricos, etc.)
+              </p>
+              <CompositionEditor
+                value={form.raw_materials || []}
+                onChange={(raw_materials) => setForm(p => ({ ...p, raw_materials }))}
               />
             </div>
 

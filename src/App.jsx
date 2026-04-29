@@ -23,6 +23,7 @@ import ReservatTecnica from '@/pages/ReservatTecnica';
 import Agendamento from '@/pages/Agendamento';
 import Expedicao from '@/pages/Expedicao';
 import SankhyaExplorer from '@/pages/SankhyaExplorer';
+import BulkApproval from '@/pages/BulkApproval';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -65,6 +66,7 @@ const AuthenticatedApp = () => {
         <Route path="/agendamento" element={<Agendamento />} />
         <Route path="/expedicao" element={<Expedicao />} />
         <Route path="/sankhya-explorer" element={<SankhyaExplorer />} />
+        <Route path="/aprovacao-lote" element={<BulkApproval />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
