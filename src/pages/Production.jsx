@@ -212,7 +212,11 @@ export default function Production() {
   // Fetch ProductionOrder from database
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: ["productionOrders"],
-    queryFn: () => base44.entities.ProductionOrder.list("-created_date", 500),
+    queryFn: async () => {
+      const result = await base44.entities.ProductionOrder.list("-created_date", 9999);
+      console.log("Total ProductionOrders carregadas:", result.length);
+      return result;
+    },
     refetchInterval: 10000,
   });
 
