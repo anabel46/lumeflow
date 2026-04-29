@@ -82,27 +82,16 @@ const SQL_OPERACOES = `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
-    A.IDIATV,
-    A.IDEFX,
-    CASE
-        WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
-        WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.[TIPO] IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
-        ELSE 'Finalizada'
-    END AS SITUACAO_ATIV,
-    A.DHINCLUSAO,
-    A.DHACEITE,
-    A.DHINICIO,
     ITE.CODPROD,
     PRO.DESCRPROD,
     PRO.REFERENCIA
 FROM TPRIPROC P
-INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
 WHERE P.STATUSPROC IN ('A', 'P', 'F')
 AND P.IDIPROC >= ${OP_MINIMA}
-ORDER BY P.IDIPROC ASC, A.IDIATV ASC`;
+ORDER BY P.IDIPROC ASC`;
 
 // ── Sync Function ───────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
@@ -316,7 +305,7 @@ function converterParaMap(json) {
   for (const row of rows) {
     const pedido = getLong(row, colIndex, "NUMPEDIDO");
     const op = getLong(row, colIndex, "IDIPROC");
-    
+
     if (pedido == null || op == null) continue;
 
     const cPed = String(pedido);
@@ -324,33 +313,19 @@ function converterParaMap(json) {
 
     if (!resultadoFinal[cPed]) resultadoFinal[cPed] = {};
 
+    // Uma linha por OP — sem atividades, sem deduplicação de produtos necessária
     if (!resultadoFinal[cPed][cOp]) {
       resultadoFinal[cPed][cOp] = {
         numeroPedido: pedido,
         numeroOp: op,
         situacaoGeral: getString(row, colIndex, "SITUACAO_GERAL"),
-        produtos: [],
+        produtos: [{
+          codigo: getLong(row, colIndex, "CODPROD"),
+          descricao: getString(row, colIndex, "DESCRPROD"),
+          referencia: getString(row, colIndex, "REFERENCIA"),
+        }],
         atividades: [],
       };
-    }
-
-    const opMap = resultadoFinal[cPed][cOp];
-
-    const idAtiv = getString(row, colIndex, "IDIATV");
-    if (idAtiv !== "" && !opMap.atividades.some((a) => a.id === idAtiv)) {
-      opMap.atividades.push({
-        id: idAtiv,
-        situacao: getString(row, colIndex, "SITUACAO_ATIV"),
-      });
-    }
-
-    const codProd = getLong(row, colIndex, "CODPROD");
-    if (codProd != null && !opMap.produtos.some((p) => p.codigo === codProd)) {
-      opMap.produtos.push({
-        codigo: codProd,
-        descricao: getString(row, colIndex, "DESCRPROD"),
-        referencia: getString(row, colIndex, "REFERENCIA"),
-      });
     }
   }
 
