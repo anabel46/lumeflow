@@ -75,8 +75,8 @@ SELECT DISTINCT
     PRO.REFERENCIA,
     PRO.DESCRPROD,
     A.IDEFX,
-    FX.DESCRICAO    AS DESCRICAO_FX,
-    FX.SEQUENCIA    AS SEQ_FX
+    A.IDIATV,
+    FX.DESCRICAO    AS DESCRICAO_FX
 FROM TPRIPROC P
 INNER JOIN TPRIATV A   ON A.IDIPROC  = P.IDIPROC
 LEFT  JOIN TPREFX  FX  ON FX.IDEFX   = A.IDEFX
@@ -87,7 +87,7 @@ LEFT  JOIN (
 ) ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT  JOIN TGFPRO  PRO ON PRO.CODPROD = ITE.CODPROD
 WHERE A.IDEFX IS NOT NULL
-ORDER BY PRO.REFERENCIA, FX.SEQUENCIA`;
+ORDER BY PRO.REFERENCIA, A.IDIATV`;
 
 // ── Mapeamento de descrição Sankhya → enum LumeFlow ──────────────────────────
 const SETOR_MAP = {
@@ -148,20 +148,21 @@ Deno.serve(async (req) => {
       for (const row of fluxoRaw.responseBody.rows) {
         const ref    = getString(row, idx, "REFERENCIA");
         const idefx  = getString(row, idx, "IDEFX");
+        const idiatv = getLong(row, idx, "IDIATV") || 0;
         const descFx = getString(row, idx, "DESCRICAO_FX").toUpperCase();
-        const seqFx  = getLong(row, idx, "SEQ_FX") || 0;
         if (!ref || !idefx) continue;
         if (!fluxoPorRef[ref]) fluxoPorRef[ref] = [];
         if (!fluxoPorRef[ref].some(f => f.idefx === idefx)) {
           fluxoPorRef[ref].push({
             idefx,
+            idiatv,
             descricao: getString(row, idx, "DESCRICAO_FX"),
             setor:     SETOR_MAP[descFx] || null,
-            sequencia: seqFx,
+            sequencia: idiatv,
           });
         }
       }
-      Object.values(fluxoPorRef).forEach(arr => arr.sort((a, b) => a.sequencia - b.sequencia));
+      Object.values(fluxoPorRef).forEach(arr => arr.sort((a, b) => a.idiatv - b.idiatv));
     }
 
     // ── Consolida resultado ───────────────────────────────────────────────────

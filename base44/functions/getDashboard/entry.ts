@@ -50,6 +50,24 @@ async function fetchSankhya(url, options = {}) {
   return res;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getNode(row, idx, col) {
+  const i = idx[col.toUpperCase()];
+  return (i !== undefined && i < row.length) ? row[i] : null;
+}
+function getLong(row, idx, col) {
+  const v = getNode(row, idx, col);
+  if (v == null || v === "") return null;
+  const cleaned = String(v).trim().replace(/\D/g, "");
+  if (cleaned === "") return null;
+  const n = Number(cleaned);
+  return isNaN(n) ? null : n;
+}
+function getString(row, idx, col) {
+  const v = getNode(row, idx, col);
+  return (v == null) ? "" : String(v).trim();
+}
+
 // ── SQL: Fluxo Produtivo ──────────────────────────────────────────────────────
 function getSqlFluxo(opId) {
   const filtroOp = opId ? `WHERE P.IDIPROC = ${Number(opId)}` : "";
@@ -152,8 +170,8 @@ function converterParaMap(fluxoJson, bomJson) {
       let ativ = currentOp.atividades.find(a => a.id === idAtiv);
       if (!ativ) {
         ativ = {
-          id:       idAtiv,
-          idefx:    getString(row, idx, "IDEFX"),
+          id:        idAtiv,
+          idefx:     getString(row, idx, "IDEFX"),
           descricao: getString(row, idx, "DESCRICAO_ATIVIDADE"),
           situacao:  getString(row, idx, "SITUACAO_ATIV"),
           dhAceite:  getString(row, idx, "DHACEITE"),
@@ -179,9 +197,9 @@ function converterParaMap(fluxoJson, bomJson) {
       const codProd = getLong(row, idx, "CODPROD");
       if (codProd && !currentOp.produtos.some(p => p.codigo === codProd)) {
         currentOp.produtos.push({
-          codigo:      codProd,
-          descricao:   getString(row, idx, "DESCRPROD"),
-          referencia:  getString(row, idx, "REFERENCIA"),
+          codigo:     codProd,
+          descricao:  getString(row, idx, "DESCRPROD"),
+          referencia: getString(row, idx, "REFERENCIA"),
           componentes: [],
         });
       }
@@ -233,24 +251,6 @@ function calcularEstatisticas(pedidosMap) {
     });
   });
   return { totalOps, aguardando, emAndamento, finalizadas };
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function getNode(row, idx, col) {
-  const i = idx[col.toUpperCase()];
-  return (i !== undefined && i < row.length) ? row[i] : null;
-}
-function getLong(row, idx, col) {
-  const v = getNode(row, idx, col);
-  if (v == null || v === "") return null;
-  const cleaned = String(v).trim().replace(/\D/g, "");
-  if (cleaned === "") return null;
-  const n = Number(cleaned);
-  return isNaN(n) ? null : n;
-}
-function getString(row, idx, col) {
-  const v = getNode(row, idx, col);
-  return (v == null) ? "" : String(v).trim();
 }
 
 // ── Handler Principal ─────────────────────────────────────────────────────────
