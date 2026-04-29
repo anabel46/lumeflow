@@ -5,7 +5,7 @@ import {
   ShieldCheck, ChevronLeft, ChevronRight, BookOpen,
   Scissors, Flame, Paintbrush, CircleDot, Palette, Sparkles,
   Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, Headphones, FileText, UserCog, Briefcase,
-  Truck, Calendar, Store
+  Truck, Calendar, Store, Database
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTORS } from "@/lib/constants";
@@ -29,6 +29,7 @@ const mainNav = [
   { path: "/reserva-tecnica", label: "Reserva Técnica", icon: Briefcase },
   { path: "/relatorios", label: "Relatórios", icon: FileText },
   { path: "/administracao", label: "Administração", icon: UserCog },
+  { path: "/sankhya-explorer", label: "Explorador Sankhya", icon: Database },
 ];
 
 export default function Sidebar() {
