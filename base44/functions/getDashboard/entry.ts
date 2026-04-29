@@ -11,14 +11,13 @@ async function getValidToken() {
 }
 
 async function refreshToken() {
-  const oauthUrl      = Deno.env.get("SANKHYA_OAUTH_URL");
-  const clientId      = Deno.env.get("SANKHYA_CLIENT_ID");
-  const clientSecret  = Deno.env.get("SANKHYA_CLIENT_SECRET");
-  const xToken        = Deno.env.get("SANKHYA_X_TOKEN");
+  const oauthUrl     = Deno.env.get("SANKHYA_OAUTH_URL");
+  const clientId     = Deno.env.get("SANKHYA_CLIENT_ID");
+  const clientSecret = Deno.env.get("SANKHYA_CLIENT_SECRET");
+  const xToken       = Deno.env.get("SANKHYA_X_TOKEN");
 
-  if (!oauthUrl || !clientId || !clientSecret || !xToken) {
+  if (!oauthUrl || !clientId || !clientSecret || !xToken)
     throw new Error("Variáveis Sankhya ausentes no .env");
-  }
 
   const body = new URLSearchParams({
     grant_type:    "client_credentials",
@@ -32,10 +31,7 @@ async function refreshToken() {
     body: body.toString(),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Auth Sankhya falhou (${res.status}): ${text}`);
-  }
+  if (!res.ok) throw new Error(`Auth Sankhya falhou (${res.status}): ${await res.text()}`);
 
   const data = await res.json();
   _cachedToken = data.access_token;
@@ -45,21 +41,12 @@ async function refreshToken() {
 
 async function fetchSankhya(url, options = {}) {
   const token = await getValidToken();
-
-  const makeHeaders = (t) => ({
-    ...(options.headers || {}),
-    "Authorization": `Bearer ${t}`,
-    "Content-Type": "application/json",
-  });
-
+  const makeHeaders = (t) => ({ ...(options.headers || {}), "Authorization": `Bearer ${t}`, "Content-Type": "application/json" });
   let res = await fetch(url, { ...options, headers: makeHeaders(token) });
-
   if (res.status === 401) {
     _cachedToken = null;
-    const fresh = await refreshToken();
-    res = await fetch(url, { ...options, headers: makeHeaders(fresh) });
+    res = await fetch(url, { ...options, headers: makeHeaders(await refreshToken()) });
   }
-
   return res;
 }
 
@@ -73,7 +60,6 @@ SELECT
     P.STATUSPROC       AS SITUACAO_GERAL,
     A.IDIATV,
     A.IDEFX,
-    FX.CODIGO          AS CODIGO_FX,
     FX.DESCRICAO       AS DESCRICAO_ATIVIDADE,
     A.DHINCLUSAO,
     A.DHACEITE,
@@ -97,7 +83,11 @@ INNER JOIN TPRIATV  A   ON A.IDIPROC  = P.IDIPROC
 LEFT  JOIN TPREIATV E   ON E.IDIATV   = A.IDIATV
 LEFT  JOIN TPREFX   FX  ON FX.IDEFX   = A.IDEFX
 LEFT  JOIN TGFCAB   CAB ON CAB.NUNOTA = P.NUNOTA
-LEFT  JOIN TGFITE   ITE ON ITE.NUNOTA = P.NUNOTA
+LEFT  JOIN (
+    SELECT NUNOTA, MIN(CODPROD) AS CODPROD
+    FROM TGFITE
+    GROUP BY NUNOTA
+) ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT  JOIN TGFPRO   PRO ON PRO.CODPROD = ITE.CODPROD
 ${filtroOp}
 ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV, E.DHINICIAL`;
@@ -131,7 +121,6 @@ ORDER BY E.CODPROD, E.SEQITEM`;
 function converterParaMap(fluxoJson, bomJson) {
   const resultado = {};
 
-  // 1. Processa fluxo produtivo
   const body = fluxoJson.responseBody;
   if (body?.rows) {
     const meta = body.fieldsMetadata;
@@ -159,14 +148,12 @@ function converterParaMap(fluxoJson, bomJson) {
 
       const currentOp = resultado[cPed][cOp];
 
-      // Atividade com execuções reais
       const idAtiv = getString(row, idx, "IDIATV");
       let ativ = currentOp.atividades.find(a => a.id === idAtiv);
       if (!ativ) {
         ativ = {
-          id:        idAtiv,
-          idefx:     getString(row, idx, "IDEFX"),
-          codigoFx:  getString(row, idx, "CODIGO_FX"),
+          id:       idAtiv,
+          idefx:    getString(row, idx, "IDEFX"),
           descricao: getString(row, idx, "DESCRICAO_ATIVIDADE"),
           situacao:  getString(row, idx, "SITUACAO_ATIV"),
           dhAceite:  getString(row, idx, "DHACEITE"),
@@ -176,7 +163,6 @@ function converterParaMap(fluxoJson, bomJson) {
         currentOp.atividades.push(ativ);
       }
 
-      // Execução real desta atividade (pode haver N por atividade)
       const idExec = getString(row, idx, "IDIEXEC");
       if (idExec && !ativ.execucoes.some(e => e.id === idExec)) {
         ativ.execucoes.push({
@@ -186,12 +172,10 @@ function converterParaMap(fluxoJson, bomJson) {
           fim:    getString(row, idx, "EXEC_FIM"),
           qtd:    getLong(row,    idx, "EXEC_QTD"),
         });
-        // Recalcula situação pela execução mais recente
-        if (getString(row, idx, "EXEC_FIM"))  ativ.situacao = "Finalizada";
-        else if (idExec)                       ativ.situacao = "Em andamento";
+        if (getString(row, idx, "EXEC_FIM")) ativ.situacao = "Finalizada";
+        else if (idExec)                      ativ.situacao = "Em andamento";
       }
 
-      // Produto (deduplica)
       const codProd = getLong(row, idx, "CODPROD");
       if (codProd && !currentOp.produtos.some(p => p.codigo === codProd)) {
         currentOp.produtos.push({
@@ -204,7 +188,6 @@ function converterParaMap(fluxoJson, bomJson) {
     }
   }
 
-  // 2. Injeta BOM (composição) nos produtos
   const bomBody = bomJson?.responseBody;
   if (bomBody?.rows) {
     const meta = bomBody.fieldsMetadata;
@@ -229,9 +212,7 @@ function converterParaMap(fluxoJson, bomJson) {
 
     Object.values(resultado).forEach(ops =>
       Object.values(ops).forEach(op =>
-        op.produtos.forEach(p => {
-          p.componentes = bomMap[p.codigo] || [];
-        })
+        op.produtos.forEach(p => { p.componentes = bomMap[p.codigo] || []; })
       )
     );
   }
@@ -242,7 +223,6 @@ function converterParaMap(fluxoJson, bomJson) {
 // ── Estatísticas ──────────────────────────────────────────────────────────────
 function calcularEstatisticas(pedidosMap) {
   let totalOps = 0, aguardando = 0, emAndamento = 0, finalizadas = 0;
-
   Object.values(pedidosMap).forEach(ops => {
     Object.values(ops).forEach(op => {
       totalOps++;
@@ -252,7 +232,6 @@ function calcularEstatisticas(pedidosMap) {
       else aguardando++;
     });
   });
-
   return { totalOps, aguardando, emAndamento, finalizadas };
 }
 
@@ -261,7 +240,6 @@ function getNode(row, idx, col) {
   const i = idx[col.toUpperCase()];
   return (i !== undefined && i < row.length) ? row[i] : null;
 }
-
 function getLong(row, idx, col) {
   const v = getNode(row, idx, col);
   if (v == null || v === "") return null;
@@ -270,7 +248,6 @@ function getLong(row, idx, col) {
   const n = Number(cleaned);
   return isNaN(n) ? null : n;
 }
-
 function getString(row, idx, col) {
   const v = getNode(row, idx, col);
   return (v == null) ? "" : String(v).trim();
@@ -292,20 +269,15 @@ Deno.serve(async (req) => {
     const callSankhya = (sql) =>
       fetchSankhya(urlSankhya, {
         method: "POST",
-        body: JSON.stringify({
-          serviceName: "DbExplorerSP.executeQuery",
-          requestBody: { sql },
-        }),
+        body: JSON.stringify({ serviceName: "DbExplorerSP.executeQuery", requestBody: { sql } }),
       }).then(r => r.json());
 
-    // Executa fluxo produtivo e BOM em paralelo
     const [fluxoRaw, bomRaw] = await Promise.all([
       callSankhya(getSqlFluxo(opParam)),
       callSankhya(getSqlBom(opParam)),
     ]);
 
     if (String(fluxoRaw.status) !== "1") throw new Error(fluxoRaw.statusMessage);
-
     const bomSafe = String(bomRaw.status) === "1" ? bomRaw : { responseBody: null };
 
     const pedidosMap = converterParaMap(fluxoRaw, bomSafe);

@@ -75,15 +75,18 @@ SELECT DISTINCT
     PRO.REFERENCIA,
     PRO.DESCRPROD,
     A.IDEFX,
-    FX.CODIGO       AS CODIGO_FX,
     FX.DESCRICAO    AS DESCRICAO_FX,
     FX.SEQUENCIA    AS SEQ_FX
 FROM TPRIPROC P
 INNER JOIN TPRIATV A   ON A.IDIPROC  = P.IDIPROC
 LEFT  JOIN TPREFX  FX  ON FX.IDEFX   = A.IDEFX
-LEFT  JOIN TGFITE  ITE ON ITE.NUNOTA = P.NUNOTA
+LEFT  JOIN (
+    SELECT NUNOTA, MIN(CODPROD) AS CODPROD
+    FROM TGFITE
+    GROUP BY NUNOTA
+) ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT  JOIN TGFPRO  PRO ON PRO.CODPROD = ITE.CODPROD
-WHERE FX.IDEFX IS NOT NULL
+WHERE A.IDEFX IS NOT NULL
 ORDER BY PRO.REFERENCIA, FX.SEQUENCIA`;
 
 // ── Mapeamento de descrição Sankhya → enum LumeFlow ──────────────────────────
@@ -152,7 +155,6 @@ Deno.serve(async (req) => {
         if (!fluxoPorRef[ref].some(f => f.idefx === idefx)) {
           fluxoPorRef[ref].push({
             idefx,
-            codigoFx:  getString(row, idx, "CODIGO_FX"),
             descricao: getString(row, idx, "DESCRICAO_FX"),
             setor:     SETOR_MAP[descFx] || null,
             sequencia: seqFx,
