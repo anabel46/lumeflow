@@ -170,6 +170,9 @@ Deno.serve(async (req) => {
             debugLog.push(`♻️ Atualizando: ${opData.numeroOp}`);
             await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
               status: mapearStatus(opData.situacaoGeral),
+              idiproc: opData.numeroOp.toString(),
+              reference: opData.produtos?.[0]?.referencia || "",
+              product_name: opData.produtos?.[0]?.descricao || "—",
             });
 
             // Se houver duplicatas, deletar os demais para evitar corrupção
@@ -190,9 +193,11 @@ Deno.serve(async (req) => {
             debugLog.push(`🆕 Inserindo nova: ${opData.numeroOp}`);
             await base44.asServiceRole.entities.ProductionOrder.create({
               unique_number: opData.numeroOp.toString(),
+              idiproc: opData.numeroOp.toString(),
               order_id: numPedido.toString(),
               order_number: numPedido.toString(),
               product_name: opData.produtos?.[0]?.descricao || "—",
+              reference: opData.produtos?.[0]?.referencia || "",
               quantity: 1,
               status: mapearStatus(opData.situacaoGeral),
             });
