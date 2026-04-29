@@ -9,6 +9,7 @@ async function getValidToken() {
   if (_cachedToken && Date.now() < _expiresAt - MARGIN_MS) return _cachedToken;
   return refreshToken();
 }
+
 async function refreshToken() {
   const oauthUrl = Deno.env.get("SANKHYA_OAUTH_URL");
   const clientId = Deno.env.get("SANKHYA_CLIENT_ID");
@@ -16,20 +17,57 @@ async function refreshToken() {
   const xToken = Deno.env.get("SANKHYA_X_TOKEN");
   if (!oauthUrl || !clientId || !clientSecret || !xToken)
     throw new Error("Variáveis Sankhya ausentes");
+
   const body = new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret });
-  const res = await fetch(oauthUrl, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Token": xToken }, body: body.toString() });
-  if (!res.ok) throw new Error(`Auth Sankhya falhou: ${await res.text()}`);
-  const data = await res.json();
-  _cachedToken = data.access_token;
-  _expiresAt = Date.now() + data.expires_in * 1000;
-  return _cachedToken;
+
+  // ✅ Timeout de 15s no auth
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const res = await fetch(oauthUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Token": xToken },
+      body: body.toString(),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Auth Sankhya falhou: ${await res.text()}`);
+    const data = await res.json();
+    _cachedToken = data.access_token;
+    _expiresAt = Date.now() + data.expires_in * 1000;
+    return _cachedToken;
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Timeout no auth Sankhya (15s)");
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
-async function fetchSankhya(url, options = {}) {
+
+// ✅ Timeout configurável por chamada (padrão 30s)
+async function fetchSankhya(url, options = {}, timeoutMs = 30_000) {
   const token = await getValidToken();
-  const makeHeaders = (t) => ({ ...(options.headers || {}), "Authorization": `Bearer ${t}`, "Content-Type": "application/json" });
-  let res = await fetch(url, { ...options, headers: makeHeaders(token) });
-  if (res.status === 401) { _cachedToken = null; res = await fetch(url, { ...options, headers: makeHeaders(await refreshToken()) }); }
-  return res;
+  const makeHeaders = (t) => ({
+    ...(options.headers || {}),
+    "Authorization": `Bearer ${t}`,
+    "Content-Type": "application/json",
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    let res = await fetch(url, { ...options, headers: makeHeaders(token), signal: controller.signal });
+    if (res.status === 401) {
+      _cachedToken = null;
+      res = await fetch(url, { ...options, headers: makeHeaders(await refreshToken()), signal: controller.signal });
+    }
+    return res;
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error(`Timeout na chamada Sankhya (${timeoutMs / 1000}s): ${url}`);
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -68,7 +106,7 @@ const SETOR_MAP = {
   "EMBALAGEM": "embalagem",
 };
 
-// ── SQL: OPs com produto e pedido ─────────────────────────────────────────────
+// ── SQLs ──────────────────────────────────────────────────────────────────────
 const SQL_OPS = `
 SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
@@ -88,7 +126,6 @@ LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
 WHERE P.STATUSPROC IN ('A', 'P', 'F')
 ORDER BY P.IDIPROC ASC`;
 
-// ── SQL: Fluxo produtivo por OP ───────────────────────────────────────────────
 const SQL_FLUXO = `
 SELECT DISTINCT
     P.IDIPROC,
@@ -110,6 +147,10 @@ function mapStatus(situacao) {
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
+  // ✅ Timeout global de 55s (abaixo do gateway de 60s)
+  const globalController = new AbortController();
+  const globalTimeoutId = setTimeout(() => globalController.abort(), 55_000);
+
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -118,11 +159,12 @@ Deno.serve(async (req) => {
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     const urlSankhya = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
 
+    // ✅ Timeout de 25s por query SQL no Sankhya
     const callSankhya = (sql) =>
       fetchSankhya(urlSankhya, {
         method: "POST",
         body: JSON.stringify({ serviceName: "DbExplorerSP.executeQuery", requestBody: { sql } }),
-      }).then(r => r.json());
+      }, 25_000).then(r => r.json());
 
     console.log("🔄 Buscando OPs e fluxo do Sankhya em paralelo...");
     const [opsRaw, fluxoRaw] = await Promise.all([
@@ -153,7 +195,6 @@ Deno.serve(async (req) => {
           });
         }
       }
-      // Ordena por IDIATV (sequência natural)
       Object.values(fluxoPorOp).forEach(arr => arr.sort((a, b) => a.idiatv - b.idiatv));
     }
 
@@ -200,6 +241,12 @@ Deno.serve(async (req) => {
     const BATCH = 20;
 
     for (let i = 0; i < opsSankhya.length; i += BATCH) {
+      // ✅ Aborta o lote inteiro se o timeout global disparar
+      if (globalController.signal.aborted) {
+        console.warn("⚠️ Timeout global atingido, interrompendo sincronização");
+        break;
+      }
+
       const batch = opsSankhya.slice(i, i + BATCH);
       await Promise.all(batch.map(async (op) => {
         try {
@@ -226,7 +273,6 @@ Deno.serve(async (req) => {
               production_sequence: payload.production_sequence,
               sankhya_fluxo:       payload.sankhya_fluxo,
             });
-            // Remove duplicatas
             for (let d = 1; d < existing.length; d++) {
               await base44.asServiceRole.entities.ProductionOrder.delete(existing[d].id).catch(() => {});
             }
@@ -245,20 +291,30 @@ Deno.serve(async (req) => {
       }));
     }
 
-    const msg = `Sincronização concluída: ${inserted} inseridas, ${updated} atualizadas, ${errors} erros`;
-    console.log("✅", msg);
+    const aborted = globalController.signal.aborted;
+    const msg = aborted
+      ? `Sincronização parcial (timeout 55s): ${inserted} inseridas, ${updated} atualizadas, ${errors} erros`
+      : `Sincronização concluída: ${inserted} inseridas, ${updated} atualizadas, ${errors} erros`;
+    console.log(aborted ? "⚠️" : "✅", msg);
 
     return Response.json({
-      success:  true,
-      message:  msg,
+      success: true,
+      partial: aborted,
+      message: msg,
       inserted,
       updated,
       errors,
-      total:    opsSankhya.length,
+      total: opsSankhya.length,
     });
 
   } catch (error) {
+    const isTimeout = error.message?.includes("Timeout");
     console.error("❌ Erro sync-ops:", error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json(
+      { error: error.message, timeout: isTimeout },
+      { status: isTimeout ? 504 : 500 }
+    );
+  } finally {
+    clearTimeout(globalTimeoutId);
   }
 });
