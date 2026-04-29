@@ -120,20 +120,44 @@ Deno.serve(async (req) => {
     if (!baseUrl) throw new Error("SANKHYA_BASE_URL não configurada");
 
     const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
-    const res = await fetchSankhya(url, {
-      method: "POST",
-      body: JSON.stringify({
-        serviceName: "DbExplorerSP.executeQuery",
-        requestBody: { sql: SQL_OPERACOES, maxResults: 99999 },
-      }),
-    });
 
-    const json = await res.json();
-    if (String(json.status) !== "1") {
-      throw new Error(`Sankhya erro: ${json.statusMessage}`);
+    // ── Paginação ────────────────────────────────────────────────────────────
+    const pageSize = 200;
+    let currentPage = 1;
+    let todasLinhas = [];
+    let fieldsMetadata = null;
+
+    while (true) {
+      const res = await fetchSankhya(url, {
+        method: "POST",
+        body: JSON.stringify({
+          serviceName: "DbExplorerSP.executeQuery",
+          requestBody: {
+            sql: SQL_OPERACOES,
+            pageSize: pageSize,
+            currentPage: currentPage,
+          },
+        }),
+      });
+
+      const json = await res.json();
+      if (String(json.status) !== "1") {
+        throw new Error(`Sankhya erro (página ${currentPage}): ${json.statusMessage}`);
+      }
+
+      const rows = json.responseBody?.rows || [];
+      if (!fieldsMetadata) fieldsMetadata = json.responseBody?.fieldsMetadata;
+
+      debugLog.push(`📄 Página ${currentPage}: ${rows.length} linhas`);
+      todasLinhas.push(...rows);
+
+      if (rows.length < pageSize) break;
+      currentPage++;
     }
 
-    const pedidosMap = converterParaMap(json);
+    debugLog.push(`📦 Total de linhas brutas coletadas: ${todasLinhas.length}`);
+
+    const pedidosMap = converterParaMap({ responseBody: { rows: todasLinhas, fieldsMetadata } });
     const totalPedidos = Object.keys(pedidosMap).length;
     debugLog.push(`✅ Sankhya retornou: ${totalPedidos} pedidos`);
     console.log("✅ Sankhya retornou:", totalPedidos, "pedidos");
