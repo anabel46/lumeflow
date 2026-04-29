@@ -121,104 +121,77 @@ Deno.serve(async (req) => {
 
     const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
 
-    // ── Paginação ────────────────────────────────────────────────────────────
-    const pageSize = 200;
-    let currentPage = 1;
-    let todasLinhas = [];
-    let fieldsMetadata = null;
+    // ── Busca única com maxResults (filtro de OP mínima já no SQL) ───────────
+    const t0 = Date.now();
+    const res = await fetchSankhya(url, {
+      method: "POST",
+      body: JSON.stringify({
+        serviceName: "DbExplorerSP.executeQuery",
+        requestBody: { sql: SQL_OPERACOES, maxResults: 5000 },
+      }),
+    });
 
-    while (true) {
-      const res = await fetchSankhya(url, {
-        method: "POST",
-        body: JSON.stringify({
-          serviceName: "DbExplorerSP.executeQuery",
-          requestBody: {
-            sql: SQL_OPERACOES,
-            pageSize: pageSize,
-            currentPage: currentPage,
-          },
-        }),
-      });
-
-      const json = await res.json();
-      if (String(json.status) !== "1") {
-        throw new Error(`Sankhya erro (página ${currentPage}): ${json.statusMessage}`);
-      }
-
-      const rows = json.responseBody?.rows || [];
-      if (!fieldsMetadata) fieldsMetadata = json.responseBody?.fieldsMetadata;
-
-      debugLog.push(`📄 Página ${currentPage}: ${rows.length} linhas`);
-      todasLinhas.push(...rows);
-
-      if (rows.length < pageSize) break;
-      currentPage++;
+    const json = await res.json();
+    if (String(json.status) !== "1") {
+      throw new Error(`Sankhya erro: ${json.statusMessage}`);
     }
 
-    debugLog.push(`📦 Total de linhas brutas coletadas: ${todasLinhas.length}`);
+    const todasLinhas = json.responseBody?.rows || [];
+    const fieldsMetadata = json.responseBody?.fieldsMetadata;
+    debugLog.push(`📦 Linhas brutas recebidas: ${todasLinhas.length} (${Date.now() - t0}ms)`);
+    console.log(`📦 Linhas brutas: ${todasLinhas.length} em ${Date.now() - t0}ms`);
 
     const pedidosMap = converterParaMap({ responseBody: { rows: todasLinhas, fieldsMetadata } });
     const totalPedidos = Object.keys(pedidosMap).length;
     debugLog.push(`✅ Sankhya retornou: ${totalPedidos} pedidos`);
     console.log("✅ Sankhya retornou:", totalPedidos, "pedidos");
 
-    // Calcular total de OPs e encontrar a maior
-    const todasOps = [];
-    for (const opsMap of Object.values(pedidosMap)) {
+
+
+    // 2. Flatten todas as OPs em lista plana
+    const todasOpsParaSync = [];
+    for (const [numPedido, opsMap] of Object.entries(pedidosMap)) {
       for (const opData of Object.values(opsMap)) {
-        todasOps.push(opData);
+        todasOpsParaSync.push({ numPedido, opData });
       }
     }
-    const maxOp = todasOps.length > 0 ? Math.max(...todasOps.map(op => Number(op.numeroOp) || 0)) : 0;
-    
-    debugLog.push(`📦 Total de OPs retornadas pelo Sankhya: ${todasOps.length}`);
-    debugLog.push(`🔢 OP mais recente (maior número) do Sankhya: ${maxOp}`);
-    debugLog.push(`⚠️ Se a OP nova criada tem número > ${maxOp}, ela não está na query`);
+    debugLog.push(`🔄 Total de OPs para sincronizar: ${todasOpsParaSync.length}`);
 
-    // 2. Sincroniza para ProductionOrder (usar service role para inserir)
+    // 3. Buscar todos os registros existentes de uma vez (sem filtro por OP individual)
+    const existingRecords = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 9999);
+    const existingByUniqueNumber = {};
+    for (const rec of existingRecords) {
+      const key = rec.unique_number;
+      if (!existingByUniqueNumber[key]) existingByUniqueNumber[key] = [];
+      existingByUniqueNumber[key].push(rec);
+    }
+    debugLog.push(`📋 Registros existentes no banco: ${existingRecords.length}`);
+
+    // 4. Sincroniza em lotes paralelos de 10
     let insertedCount = 0;
     let updatedCount = 0;
+    const BATCH_SIZE = 20;
 
-    for (const [numPedido, opsMap] of Object.entries(pedidosMap)) {
-      for (const [numOp, opData] of Object.entries(opsMap)) {
+    for (let i = 0; i < todasOpsParaSync.length; i += BATCH_SIZE) {
+      const batch = todasOpsParaSync.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async ({ numPedido, opData }) => {
         try {
-          // Tenta buscar a OP já existente
-          debugLog.push(`🔍 Verificando OP: ${opData.numeroOp?.toString()}`);
-
-          const existing = await base44.asServiceRole.entities.ProductionOrder.filter({
-            unique_number: opData.numeroOp.toString(),
-          });
-
-          debugLog.push(`🔍 Resultado: encontrados=${existing?.length}, buscado=${opData.numeroOp?.toString()}`);
-
-          const record = existing?.[0] || null;
+          const existing = existingByUniqueNumber[opData.numeroOp.toString()] || [];
+          const record = existing[0] || null;
 
           if (record) {
-            // Atualiza usando o primeiro registro encontrado
-            debugLog.push(`♻️ Atualizando: ${opData.numeroOp}`);
             await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
               status: mapearStatus(opData.situacaoGeral),
               idiproc: opData.numeroOp.toString(),
               reference: opData.produtos?.[0]?.referencia || "",
               product_name: opData.produtos?.[0]?.descricao || "—",
             });
-
-            // Se houver duplicatas, deletar os demais para evitar corrupção
-            if (existing.length > 1) {
-              debugLog.push(`⚠️ Duplicatas encontradas: ${existing.length}. Deletando ${existing.length - 1} cópia(s)...`);
-              for (let i = 1; i < existing.length; i++) {
-                try {
-                  await base44.asServiceRole.entities.ProductionOrder.delete(existing[i].id);
-                  debugLog.push(`  🗑️ Deletado: ${existing[i].id}`);
-                } catch (err) {
-                  debugLog.push(`  ❌ Erro ao deletar: ${err.message}`);
-                }
-              }
+            // Deletar duplicatas
+            for (let d = 1; d < existing.length; d++) {
+              await base44.asServiceRole.entities.ProductionOrder.delete(existing[d].id).catch(() => {});
             }
             updatedCount++;
           } else {
-            // Insere novo com campos obrigatórios
-            debugLog.push(`🆕 Inserindo nova: ${opData.numeroOp}`);
             await base44.asServiceRole.entities.ProductionOrder.create({
               unique_number: opData.numeroOp.toString(),
               idiproc: opData.numeroOp.toString(),
@@ -232,18 +205,9 @@ Deno.serve(async (req) => {
             insertedCount++;
           }
         } catch (err) {
-          console.error("❌ Erro ao sync OP:", {
-            error: err?.message || err,
-            uniqueNumber: opData?.numeroOp,
-            numeroPedido: numPedido,
-            dadosTentados: {
-              unique_number: opData?.numeroOp?.toString(),
-              product_name: opData?.produtos?.[0]?.descricao,
-              order_number: numPedido?.toString(),
-            },
-          });
+          console.error("❌ Erro ao sync OP:", opData?.numeroOp, err?.message);
         }
-      }
+      }));
     }
 
     debugLog.push(`📊 Sincronização concluída: ${insertedCount} inseridas, ${updatedCount} atualizadas`);
