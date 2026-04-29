@@ -74,6 +74,9 @@ async function fetchSankhya(url, options = {}) {
   return res;
 }
 
+// ── Filtro de OP mínima (ajustar conforme necessário) ────────────────────────
+const OP_MINIMA = 45000;
+
 // ── SQL Query ────────────────────────────────────────────────────────────────
 const SQL_OPERACOES = `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
@@ -98,6 +101,7 @@ LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
 WHERE P.STATUSPROC IN ('A', 'P', 'F')
+AND P.IDIPROC >= ${OP_MINIMA}
 ORDER BY P.IDIPROC ASC, A.IDIATV ASC`;
 
 // ── Sync Function ───────────────────────────────────────────────────────────
