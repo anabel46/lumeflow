@@ -16,8 +16,9 @@ async function refreshToken() {
   const clientSecret = Deno.env.get("SANKHYA_CLIENT_SECRET");
   const xToken = Deno.env.get("SANKHYA_X_TOKEN");
 
-  if (!oauthUrl || !clientId || !clientSecret || !xToken)
+  if (!oauthUrl || !clientId || !clientSecret || !xToken) {
     throw new Error("Variáveis Sankhya ausentes no .env");
+  }
 
   const body = new URLSearchParams({
     grant_type: "client_credentials",
@@ -56,78 +57,39 @@ async function fetchSankhya(url, options = {}) {
 }
 
 // ── SQL ──────────────────────────────────────────────────────────────────────
-function getSql(opId, limit) {
-  // ✅ Filtro por OP específica tem prioridade
-  if (opId) {
-    return `SELECT
-      COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
-      P.IDIPROC,
-      P.STATUSPROC AS SITUACAO_GERAL,
-      A.IDIATV,
-      A.IDEFX,
-      FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
-      CASE
-          WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
-          WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.TIPO IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
-          ELSE 'Finalizada'
-      END AS SITUACAO_ATIV,
-      A.DHINCLUSAO,
-      A.DHACEITE,
-      A.DHINICIO,
-      ITE.CODPROD,
-      PRO.DESCRPROD,
-      PRO.REFERENCIA
-    FROM TPRIPROC P
-    INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-    LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
-    LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
-    LEFT JOIN (
-        SELECT NUNOTA, MIN(CODPROD) AS CODPROD
-        FROM TGFITE
-        GROUP BY NUNOTA
-    ) ITE ON ITE.NUNOTA = P.NUNOTA
-    LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-    WHERE P.IDIPROC = ${Number(opId)}
-    ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
-  }
+function getSql(opId) {
+  const filtroOp = opId ? `WHERE P.IDIPROC = ${Number(opId)}` : "";
 
-  // ✅ Sem OP específica: limita pelas N OPs mais recentes
   return `SELECT
-      COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
-      P.IDIPROC,
-      P.STATUSPROC AS SITUACAO_GERAL,
-      A.IDIATV,
-      A.IDEFX,
-      FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
-      CASE
-          WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
-          WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.TIPO IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
-          ELSE 'Finalizada'
-      END AS SITUACAO_ATIV,
-      A.DHINCLUSAO,
-      A.DHACEITE,
-      A.DHINICIO,
-      ITE.CODPROD,
-      PRO.DESCRPROD,
-      PRO.REFERENCIA
-  FROM TPRIPROC P
-  INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-  LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
-  LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
-  LEFT JOIN (
-      SELECT NUNOTA, MIN(CODPROD) AS CODPROD
-      FROM TGFITE
-      GROUP BY NUNOTA
-  ) ITE ON ITE.NUNOTA = P.NUNOTA
-  LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-  WHERE P.IDIPROC IN (
-    SELECT IDIPROC FROM (
-      SELECT IDIPROC FROM TPRIPROC
-      WHERE STATUSPROC IN ('A', 'P', 'F')
-      ORDER BY IDIPROC DESC
-    ) WHERE ROWNUM <= ${limit}   -- ✅ Oracle: pega só as N OPs mais recentes
-  )
-  ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
+    COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
+    P.IDIPROC,
+    P.STATUSPROC AS SITUACAO_GERAL,
+    A.IDIATV,
+    A.IDEFX,
+    FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
+    CASE
+        WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
+        WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.TIPO IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
+        ELSE 'Finalizada'
+    END AS SITUACAO_ATIV,
+    A.DHINCLUSAO,
+    A.DHACEITE,
+    A.DHINICIO,
+    ITE.CODPROD,
+    PRO.DESCRPROD,
+    PRO.REFERENCIA
+FROM TPRIPROC P
+INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
+LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
+LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
+LEFT JOIN (
+    SELECT NUNOTA, MIN(CODPROD) AS CODPROD
+    FROM TGFITE
+    GROUP BY NUNOTA
+) ITE ON ITE.NUNOTA = P.NUNOTA
+LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+${filtroOp}
+ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
 }
 
 // ── Main Handler ─────────────────────────────────────────────────────────────
@@ -138,13 +100,7 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const urlObj = new URL(req.url);
-    const opParam  = urlObj.searchParams.get("op");
-
-    // ✅ ?limit=10 para testes rápidos, padrão 50, máximo 200
-    const limitParam = Number(urlObj.searchParams.get("limit") || "50");
-    const limit = Math.min(Math.max(limitParam, 1), 200);
-
-    console.log(`🔍 Modo: ${opParam ? `OP específica ${opParam}` : `listagem (limit=${limit})`}`);
+    const opParam = urlObj.searchParams.get("op");
 
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     const urlSankhya = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
@@ -153,7 +109,7 @@ Deno.serve(async (req) => {
       method: "POST",
       body: JSON.stringify({
         serviceName: "DbExplorerSP.executeQuery",
-        requestBody: { sql: getSql(opParam, limit) },
+        requestBody: { sql: getSql(opParam) },
       }),
     });
 
@@ -161,20 +117,11 @@ Deno.serve(async (req) => {
     if (String(json.status) !== "1") throw new Error(json.statusMessage);
 
     const pedidosMap = converterParaMap(json);
-    const estatisticas = calcularEstatisticas(pedidosMap);
 
     return Response.json({
       pedidos: pedidosMap,
-      estatisticas,
-      // ✅ Metadados úteis para debug
-      _debug: {
-        modo: opParam ? "op_especifica" : "listagem",
-        limit_aplicado: opParam ? null : limit,
-        total_ops_retornadas: estatisticas.totalOps,
-        total_pedidos: Object.keys(pedidosMap).length,
-      },
+      estatisticas: calcularEstatisticas(pedidosMap),
     });
-
   } catch (error) {
     console.error("❌ Erro:", error.message);
     return Response.json({ error: error.message }, { status: 500 });
@@ -198,7 +145,7 @@ function converterParaMap(json) {
     if (!pedido || !op) continue;
 
     const cPed = String(pedido);
-    const cOp  = String(op);
+    const cOp = String(op);
 
     if (!resultado[cPed]) resultado[cPed] = {};
     if (!resultado[cPed][cOp]) {
@@ -213,6 +160,7 @@ function converterParaMap(json) {
 
     const currentOp = resultado[cPed][cOp];
 
+    // Adiciona Atividade com IDEFX (Deduplicada por IDIATV)
     const idAtiv = getString(row, colIndex, "IDIATV");
     if (idAtiv && !currentOp.atividades.some(a => a.id === idAtiv)) {
       currentOp.atividades.push({
@@ -226,6 +174,7 @@ function converterParaMap(json) {
       });
     }
 
+    // Adiciona Produto (Deduplicado)
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd && !currentOp.produtos.some(p => p.codigo === codProd)) {
       currentOp.produtos.push({
