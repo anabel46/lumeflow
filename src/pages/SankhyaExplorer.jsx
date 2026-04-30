@@ -14,14 +14,12 @@ function buildSqlProcesso({ referencia, limit }) {
   const ref = referencia?.trim();
   const where = ref ? `WHERE PR.REFERENCIA = '${ref.replace(/'/g, "''")}'` : "";
   const n = Number(limit) || 100;
-  return `SELECT * FROM (
-  SELECT P.CODPROC, P.DESCRPROC, P.CODPROD, PR.DESCRPROD, PR.REFERENCIA, P.VERSAO, P.ATIVO, O.CODOPE, O.DESCROPE, O.SEQUENCIA
-  FROM TSIPRG P
-  INNER JOIN TGFPRO PR ON PR.CODPROD = P.CODPROD
-  LEFT JOIN TSIOPE O ON O.CODPROC = P.CODPROC
-  ${where}
-  ORDER BY P.CODPROC, O.SEQUENCIA
-) WHERE ROWNUM <= ${n}`;
+  return `SELECT TOP ${n} P.CODPROC, P.DESCRPROC, P.CODPROD, PR.DESCRPROD, PR.REFERENCIA, P.VERSAO, P.ATIVO, O.CODOPE, O.DESCROPE, O.SEQUENCIA
+FROM TSIPRG P
+INNER JOIN TGFPRO PR ON PR.CODPROD = P.CODPROD
+LEFT JOIN TSIOPE O ON O.CODPROC = P.CODPROC
+${where}
+ORDER BY P.CODPROC, O.SEQUENCIA`;
 }
 
 function buildSqlComposicao({ referencia, codproc, limit }) {
@@ -32,14 +30,12 @@ function buildSqlComposicao({ referencia, codproc, limit }) {
   if (proc) conds.push(`E.CODPROC = ${Number(proc)}`);
   const where = conds.length > 0 ? `AND ${conds.join(" AND ")}` : "";
   const n = Number(limit) || 100;
-  return `SELECT * FROM (
-  SELECT E.CODPROD, PR.REFERENCIA, PR.DESCRPROD, E.CODPRODCOMP, PC.DESCRPROD AS DESCR_COMP, PC.REFERENCIA AS REF_COMP, E.QTDNEC, E.UNIDADE, E.CODPROC, E.CODOPE
-  FROM TGFECP E
-  INNER JOIN TGFPRO PR ON PR.CODPROD = E.CODPROD
-  INNER JOIN TGFPRO PC ON PC.CODPROD = E.CODPRODCOMP
-  WHERE 1=1 ${where}
-  ORDER BY E.CODPROD, E.CODOPE, E.CODPRODCOMP
-) WHERE ROWNUM <= ${n}`;
+  return `SELECT TOP ${n} E.CODPROD, PR.REFERENCIA, PR.DESCRPROD, E.CODPRODCOMP, PC.DESCRPROD AS DESCR_COMP, PC.REFERENCIA AS REF_COMP, E.QTDNEC, E.UNIDADE, E.CODPROC, E.CODOPE
+FROM TGFECP E
+INNER JOIN TGFPRO PR ON PR.CODPROD = E.CODPROD
+INNER JOIN TGFPRO PC ON PC.CODPROD = E.CODPRODCOMP
+WHERE 1=1 ${where}
+ORDER BY E.CODPROD, E.CODOPE, E.CODPRODCOMP`;
 }
 
 function buildSqlPedidos({ codtipoper, dtinicio, dtfim, limit }) {
@@ -49,20 +45,18 @@ function buildSqlPedidos({ codtipoper, dtinicio, dtfim, limit }) {
   if (dtfim) conds.push(`C.DTNEG <= '${dtfim}'`);
   const where = conds.length > 0 ? `AND ${conds.join(" AND ")}` : "";
   const n = Number(limit) || 100;
-  return `SELECT * FROM (
-  SELECT C.NUNOTA, C.NUMNOTA, C.CODTIPOPER, C.DTNEG, C.DTENTREGA, P.NOMEPARC AS CLIENTE, C.VLRNOTA, C.STATUSNOTA, C.CODVEND, C.OBSERVACAO
-  FROM TGFCAB C
-  INNER JOIN TGFPAR P ON P.CODPARC = C.CODPARC
-  WHERE 1=1 ${where}
-  ORDER BY C.DTNEG DESC
-) WHERE ROWNUM <= ${n}`;
+  return `SELECT TOP ${n} C.NUNOTA, C.NUMNOTA, C.CODTIPOPER, C.DTNEG, C.DTENTREGA, P.NOMEPARC AS CLIENTE, C.VLRNOTA, C.STATUSNOTA, C.CODVEND, C.OBSERVACAO
+FROM TGFCAB C
+INNER JOIN TGFPAR P ON P.CODPARC = C.CODPARC
+WHERE 1=1 ${where}
+ORDER BY C.DTNEG DESC`;
 }
 
 const SQL_PRESETS = [
-  { label: "Ver roteiros", sql: "SELECT * FROM (\n  SELECT P.CODPROC, P.DESCRPROC, PR.REFERENCIA, PR.DESCRPROD\n  FROM TSIPRG P\n  INNER JOIN TGFPRO PR ON PR.CODPROD = P.CODPROD\n  ORDER BY P.CODPROC\n) WHERE ROWNUM <= 100" },
-  { label: "Ver etapas", sql: "SELECT * FROM (\n  SELECT O.CODOPE, O.DESCROPE, O.CODPROC, O.SEQUENCIA\n  FROM TSIOPE O\n  ORDER BY O.CODPROC, O.SEQUENCIA\n) WHERE ROWNUM <= 100" },
-  { label: "Ver produtos", sql: "SELECT * FROM (\n  SELECT CODPROD, DESCRPROD, REFERENCIA, TIPOPROD, ATIVO\n  FROM TGFPRO\n  ORDER BY CODPROD\n) WHERE ROWNUM <= 100" },
-  { label: "OPs abertas", sql: "SELECT * FROM (\n  SELECT P.IDIPROC, P.STATUSPROC, COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO\n  FROM TPRIPROC P\n  LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA\n  WHERE P.STATUSPROC IN ('A','P')\n  ORDER BY P.IDIPROC DESC\n) WHERE ROWNUM <= 100" },
+  { label: "Ver roteiros", sql: "SELECT TOP 100 P.CODPROC, P.DESCRPROC, PR.REFERENCIA, PR.DESCRPROD, P.VERSAO, P.ATIVO\nFROM TSIPRG P\nINNER JOIN TGFPRO PR ON PR.CODPROD = P.CODPROD\nORDER BY P.CODPROC" },
+  { label: "Ver etapas", sql: "SELECT TOP 200 O.CODPROC, O.CODOPE, O.DESCROPE, O.SEQUENCIA\nFROM TSIOPE O\nORDER BY O.CODPROC, O.SEQUENCIA" },
+  { label: "Ver produtos", sql: "SELECT TOP 100 CODPROD, REFERENCIA, DESCRPROD, ATIVO\nFROM TGFPRO\nWHERE ATIVO = 'S'\nORDER BY REFERENCIA" },
+  { label: "Listar tabelas", sql: "SELECT TOP 100 NOMETABELA, DESCRICAO\nFROM TGFTAB\nORDER BY NOMETABELA" },
 ];
 
 // ── Results Table ─────────────────────────────────────────────────────────────
@@ -260,7 +254,7 @@ export default function SankhyaExplorer() {
             </div>
             <Textarea
               className="font-mono text-xs min-h-[140px] resize-y"
-              placeholder="SELECT * FROM TGFPRO FETCH FIRST 50 ROWS ONLY"
+              placeholder="SELECT TOP 50 CODPROD, REFERENCIA, DESCRPROD FROM TGFPRO ORDER BY REFERENCIA"
               value={freeSQL}
               onChange={e => setFreeSQL(e.target.value)}
             />
