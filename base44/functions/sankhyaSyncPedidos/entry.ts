@@ -41,7 +41,6 @@ async function refreshToken() {
   }
 }
 
-// Timeout aumentado para 45s para tolerar lentidão do Sankhya
 async function fetchSankhya(url, options = {}, timeoutMs = 45_000) {
   const token = await getValidToken();
   const makeHeaders = (t) => ({
@@ -59,27 +58,11 @@ async function fetchSankhya(url, options = {}, timeoutMs = 45_000) {
     }
     return res;
   } catch (err) {
-    if (err.name === "AbortError") throw new Error(`Timeout na chamada Sankhya (${timeoutMs / 1000}s) — API demorou demais para responder`);
+    if (err.name === "AbortError") throw new Error(`Timeout na chamada Sankhya (${timeoutMs / 1000}s)`);
     throw err;
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-function getLong(row, idx, col) {
-  const v = row[idx[col.toUpperCase()]];
-  if (v === undefined || v === null || v === "") return null;
-  const n = Number(String(v).replace(/[^\d.-]/g, ""));
-  return isNaN(n) ? null : n;
-}
-function getString(row, idx, col) {
-  const v = row[idx[col.toUpperCase()]];
-  return v !== undefined && v !== null ? String(v).trim() : "";
-}
-function buildIdx(meta) {
-  const idx = {};
-  meta.forEach((m, i) => { idx[m.name.toUpperCase()] = i; });
-  return idx;
 }
 
 // Converte "ddmmyyyy hh:mm:ss" → Date
@@ -95,109 +78,86 @@ function parseSankhyaDate(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-// Mapeia situacaoGeral da OP → status do pedido (Order)
-function mapOrderStatus(situacaoGeral, hasEmExecucao) {
-  if (situacaoGeral === "F") return "finalizado";
-  if (situacaoGeral === "A" || hasEmExecucao) return "em_producao";
-  return "confirmado";
+// Determina o status do pedido com base no conjunto de OPs
+// "em_producao" se qualquer OP for A ou P; "finalizado" só se TODAS forem F
+function mapOrderStatusFromOps(ops) {
+  const hasAtivo = ops.some(op => op.situacaoGeral === "A" || op.situacaoGeral === "P");
+  if (hasAtivo) return "em_producao";
+  return "finalizado";
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// ── SQL limitado: apenas últimos 30 dias + máx 200 OPs recentes ──────────────
-// Isso evita timeout por volume excessivo de dados
-const SQL_PEDIDOS = `
-SELECT
-    COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
-    P.STATUSPROC AS SITUACAO_GERAL,
-    MIN(A.DHINCLUSAO) AS PRIMEIRA_DHINCLUSAO,
-    MIN(PRO.REFERENCIA) AS REFERENCIA,
-    MIN(PRO.DESCRPROD) AS DESCRPROD,
-    MAX(CASE WHEN A.DHINICIO IS NOT NULL AND A.DHFINAL IS NULL THEN 1 ELSE 0 END) AS TEM_EM_EXECUCAO
-FROM TPRIPROC P
-LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
-LEFT JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-LEFT JOIN (
-    SELECT NUNOTA, MIN(CODPROD) AS CODPROD FROM TGFITE GROUP BY NUNOTA
-) ITE ON ITE.NUNOTA = P.NUNOTA
-LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-WHERE P.STATUSPROC IN ('A', 'P', 'F')
-  AND P.IDIPROC >= (SELECT MAX(IDIPROC) - 500 FROM TPRIPROC)
-GROUP BY COALESCE(CAB.NUMPEDIDO, P.NUNOTA), P.STATUSPROC
-ORDER BY NUMPEDIDO DESC`;
-
+// ── Main Handler ───────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   const startTs = Date.now();
-  const startLog = new Date(startTs).toISOString();
 
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
-    const urlSankhya = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
+    console.log(`[${new Date().toISOString()}] 🚀 sankhyaSyncPedidos iniciado`);
 
-    // ── DIAGNÓSTICO: log de início ────────────────────────────────────────────
-    console.log(`[${startLog}] 🚀 sankhyaSyncPedidos iniciado`);
-    console.log(`[${startLog}] 🌐 URL Sankhya: ${urlSankhya}`);
-
+    // ── PASSO 1: Chamar getDashboard internamente ─────────────────────────────
     const t1 = Date.now();
-    console.log(`[${new Date(t1).toISOString()}] 📡 Iniciando chamada SQL ao Sankhya...`);
+    console.log(`[${new Date(t1).toISOString()}] 📡 Chamando getDashboard...`);
 
-    let raw;
+    let dashboardData;
     try {
-      raw = await fetchSankhya(urlSankhya, {
-        method: "POST",
-        body: JSON.stringify({ serviceName: "DbExplorerSP.executeQuery", requestBody: { sql: SQL_PEDIDOS } }),
-      }, 45_000).then(r => r.json());
+      const dashRes = await base44.functions.invoke("getDashboard", {});
+      dashboardData = dashRes.data ?? dashRes;
     } catch (fetchErr) {
       const elapsed = ((Date.now() - t1) / 1000).toFixed(1);
-      console.error(`[${new Date().toISOString()}] ❌ Falha na chamada Sankhya após ${elapsed}s: ${fetchErr.message}`);
+      console.error(`[${new Date().toISOString()}] ❌ Falha ao chamar getDashboard após ${elapsed}s: ${fetchErr.message}`);
       return Response.json({
-        error: `Timeout na API Sankhya após ${elapsed}s. Tente novamente em instantes.`,
-        detail: fetchErr.message,
-      }, { status: 504 });
+        error: `Falha ao obter dados de produção: ${fetchErr.message}`,
+      }, { status: 502 });
     }
 
     const t2 = Date.now();
-    console.log(`[${new Date(t2).toISOString()}] ✅ Resposta Sankhya recebida em ${((t2 - t1) / 1000).toFixed(1)}s`);
+    console.log(`[${new Date(t2).toISOString()}] ✅ getDashboard respondeu em ${((t2 - t1) / 1000).toFixed(1)}s`);
 
-    if (String(raw.status) !== "1") {
-      throw new Error(`Sankhya retornou erro: ${raw.statusMessage}`);
+    const pedidosRaw = dashboardData?.pedidos;
+    if (!pedidosRaw || typeof pedidosRaw !== "object") {
+      throw new Error("Resposta de getDashboard não contém 'pedidos'");
     }
 
-    const rows = raw.responseBody?.rows || [];
-    const meta = raw.responseBody?.fieldsMetadata || [];
-    const idx = buildIdx(meta);
-    console.log(`[${new Date().toISOString()}] 📊 Linhas brutas recebidas: ${rows.length}`);
+    // ── PASSO 2: Transformar dados em lista de pedidos ────────────────────────
+    const pedidosList = [];
 
-    // ── Agrupa por numeroPedido (prioriza status mais ativo) ──────────────────
-    const pedidosMap = {};
-    for (const row of rows) {
-      const numPedido = String(getLong(row, idx, "NUMPEDIDO") || "");
-      if (!numPedido) continue;
+    for (const [numPedido, opsMap] of Object.entries(pedidosRaw)) {
+      const ops = Object.values(opsMap);
+      if (ops.length === 0) continue;
 
-      const situacao = getString(row, idx, "SITUACAO_GERAL");
-      const dhRaw = getString(row, idx, "PRIMEIRA_DHINCLUSAO");
-      const temEmExecucao = getLong(row, idx, "TEM_EM_EXECUCAO") === 1;
-      const referencia = getString(row, idx, "REFERENCIA");
-      const descrprod = getString(row, idx, "DESCRPROD");
+      // Status mais crítico entre todas as OPs
+      const orderStatus = mapOrderStatusFromOps(ops);
 
-      if (pedidosMap[numPedido]) {
-        const ex = pedidosMap[numPedido];
-        const prioridade = { A: 3, P: 2, F: 1 };
-        if ((prioridade[situacao] || 0) > (prioridade[ex.situacao] || 0)) {
-          ex.situacao = situacao;
-        }
-        ex.temEmExecucao = ex.temEmExecucao || temEmExecucao;
-        if (!ex.dhRaw && dhRaw) ex.dhRaw = dhRaw;
-      } else {
-        pedidosMap[numPedido] = { numPedido, situacao, dhRaw, temEmExecucao, referencia, descrprod };
-      }
+      // Primeira OP com produto
+      const opComProduto = ops.find(op => op.produtos?.length > 0) || ops[0];
+      const produto = opComProduto?.produtos?.[0] || null;
+
+      // dhInclusao da primeira atividade da primeira OP
+      const primeiraOp = ops[0];
+      const dhRaw = primeiraOp?.atividades?.[0]?.dhInclusao || null;
+      const requestDate = parseSankhyaDate(dhRaw);
+      const deliveryDeadline = requestDate
+        ? new Date(requestDate.getTime() + 20 * 24 * 60 * 60 * 1000)
+        : null;
+
+      const obs = produto
+        ? [produto.referencia, produto.descricao].filter(Boolean).join(" - ") || null
+        : null;
+
+      pedidosList.push({
+        numPedido: String(numPedido),
+        orderStatus,
+        requestDate,
+        deliveryDeadline,
+        obs,
+      });
     }
 
-    const pedidosList = Object.values(pedidosMap);
     console.log(`[${new Date().toISOString()}] 📦 Pedidos únicos a processar: ${pedidosList.length}`);
 
     // ── Busca existentes na entidade Order ────────────────────────────────────
@@ -207,41 +167,35 @@ Deno.serve(async (req) => {
       existingByNumber[o.order_number] = o;
     }
 
-    // ── Set com todos os numeroPedido vindos da API nesta sync ───────────────
+    // ── Set com todos os numeroPedido vindos da API nesta sync ────────────────
     const apiPedidoNumbers = new Set(pedidosList.map(p => p.numPedido));
 
     let inserted = 0, updated = 0, deleted = 0, errors = 0;
 
-    // ── Processa em lotes de 10 para não sobrecarregar ────────────────────────
+    // ── PASSO 3: Upsert em lotes de 10 ───────────────────────────────────────
     const BATCH_SIZE = 10;
     for (let i = 0; i < pedidosList.length; i += BATCH_SIZE) {
       const batch = pedidosList.slice(i, i + BATCH_SIZE);
-      console.log(`[${new Date().toISOString()}] 🔧 Processando lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(pedidosList.length / BATCH_SIZE)} (${batch.length} pedidos)`);
+      console.log(`[${new Date().toISOString()}] 🔧 Lote ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(pedidosList.length / BATCH_SIZE)} (${batch.length} pedidos)`);
 
       for (const p of batch) {
         try {
-          const requestDate = parseSankhyaDate(p.dhRaw);
-          const deliveryDeadline = requestDate
-            ? new Date(requestDate.getTime() + 20 * 24 * 60 * 60 * 1000)
-            : null;
-
-          const orderStatus = mapOrderStatus(p.situacao, p.temEmExecucao);
-          const obs = [p.referencia, p.descrprod].filter(Boolean).join(" - ") || null;
           const existing = existingByNumber[p.numPedido];
 
           if (existing) {
+            // Sempre sobrescreve status; preserva campos manuais
             const updatePayload = {
-              status: orderStatus,
+              status: p.orderStatus,
               sankhya_id: p.numPedido,
             };
-            if (requestDate && !existing.request_date) {
-              updatePayload.request_date = requestDate.toISOString().split("T")[0];
+            if (p.requestDate && !existing.request_date) {
+              updatePayload.request_date = p.requestDate.toISOString().split("T")[0];
             }
-            if (deliveryDeadline && !existing.delivery_deadline) {
-              updatePayload.delivery_deadline = deliveryDeadline.toISOString().split("T")[0];
+            if (p.deliveryDeadline && !existing.delivery_deadline) {
+              updatePayload.delivery_deadline = p.deliveryDeadline.toISOString().split("T")[0];
             }
-            if (!existing.observations && obs) {
-              updatePayload.observations = obs;
+            if (!existing.observations && p.obs) {
+              updatePayload.observations = p.obs;
             }
             await base44.asServiceRole.entities.Order.update(existing.id, updatePayload);
             updated++;
@@ -249,11 +203,11 @@ Deno.serve(async (req) => {
             await base44.asServiceRole.entities.Order.create({
               order_number: p.numPedido,
               client_name: "FÁBRICA",
-              request_date: requestDate ? requestDate.toISOString().split("T")[0] : null,
-              delivery_deadline: deliveryDeadline ? deliveryDeadline.toISOString().split("T")[0] : null,
+              request_date: p.requestDate ? p.requestDate.toISOString().split("T")[0] : null,
+              delivery_deadline: p.deliveryDeadline ? p.deliveryDeadline.toISOString().split("T")[0] : null,
               delivery_type: "normal",
-              status: orderStatus,
-              observations: obs,
+              status: p.orderStatus,
+              observations: p.obs,
               sankhya_id: p.numPedido,
             });
             inserted++;
@@ -268,13 +222,12 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Pausa entre lotes para não sobrecarregar a API
       if (i + BATCH_SIZE < pedidosList.length) {
         await sleep(300);
       }
     }
 
-    // ── Remove pedidos do Sankhya que sumiram da API (só os com sankhya_id) ──
+    // ── PASSO 4: Deletar pedidos que sumiram da API (apenas sankhya_id) ───────
     const toDelete = existingOrders.filter(o => o.sankhya_id && !apiPedidoNumbers.has(o.sankhya_id));
     if (toDelete.length > 0) {
       const deletedNumbers = toDelete.map(o => o.sankhya_id);
