@@ -151,7 +151,7 @@ export default function Orders() {
             <p className={cn("text-[11px]", syncResult.error ? "text-destructive" : "text-emerald-600")}>
               {syncResult.error
                 ? `Erro: ${syncResult.error}`
-                : `✓ ${syncResult.inserted ?? 0} inseridos · ${syncResult.updated ?? 0} atualizados · ${syncResult.total ?? 0} total`}
+                : `✓ ${syncResult.inserted ?? 0} inseridos · ${syncResult.updated ?? 0} atualizados · ${syncResult.deleted ?? 0} removidos · ${syncResult.total ?? 0} total`}
             </p>
           )}
         </div>

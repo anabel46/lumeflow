@@ -207,7 +207,10 @@ Deno.serve(async (req) => {
       existingByNumber[o.order_number] = o;
     }
 
-    let inserted = 0, updated = 0, errors = 0;
+    // ── Set com todos os numeroPedido vindos da API nesta sync ───────────────
+    const apiPedidoNumbers = new Set(pedidosList.map(p => p.numPedido));
+
+    let inserted = 0, updated = 0, deleted = 0, errors = 0;
 
     // ── Processa em lotes de 10 para não sobrecarregar ────────────────────────
     const BATCH_SIZE = 10;
@@ -271,13 +274,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Remove pedidos do Sankhya que sumiram da API (só os com sankhya_id) ──
+    const toDelete = existingOrders.filter(o => o.sankhya_id && !apiPedidoNumbers.has(o.sankhya_id));
+    if (toDelete.length > 0) {
+      const deletedNumbers = toDelete.map(o => o.sankhya_id);
+      console.log(`[${new Date().toISOString()}] 🗑️ Removendo ${toDelete.length} pedido(s) ausentes da API: ${deletedNumbers.join(", ")}`);
+      for (const o of toDelete) {
+        try {
+          await base44.asServiceRole.entities.Order.delete(o.id);
+          deleted++;
+        } catch (err) {
+          console.error(`[${new Date().toISOString()}] ❌ Erro ao deletar pedido ${o.sankhya_id}: ${err.message}`);
+          errors++;
+        }
+      }
+    } else {
+      console.log(`[${new Date().toISOString()}] ✅ Nenhum pedido para remover`);
+    }
+
     const totalMs = Date.now() - startTs;
-    console.log(`[${new Date().toISOString()}] ✅ Concluído em ${(totalMs / 1000).toFixed(1)}s — ${inserted} inseridos, ${updated} atualizados, ${errors} erros`);
+    console.log(`[${new Date().toISOString()}] ✅ Concluído em ${(totalMs / 1000).toFixed(1)}s — ${inserted} inseridos, ${updated} atualizados, ${deleted} removidos, ${errors} erros`);
 
     return Response.json({
       success: true,
       inserted,
       updated,
+      deleted,
       errors,
       total: pedidosList.length,
       elapsed_seconds: (totalMs / 1000).toFixed(1),
