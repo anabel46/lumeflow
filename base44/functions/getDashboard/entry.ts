@@ -57,44 +57,42 @@ async function fetchSankhya(url, options = {}) {
 }
 
 // ── SQL ──────────────────────────────────────────────────────────────────────
-// 🧪 LIMITE DE TESTE: remover o ROWNUM em produção
+// 🧪 LIMITE DE TESTE: remover o TOP e usar a query original em produção
 const TESTE_LIMITE_ROWS = 50;
 
 function getSql(opId) {
   const filtroOp = opId ? `WHERE P.IDIPROC = ${Number(opId)}` : "";
 
-  return `SELECT * FROM (
-    SELECT
-      COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
-      P.IDIPROC,
-      P.STATUSPROC AS SITUACAO_GERAL,
-      A.IDIATV,
-      A.IDEFX,
-      FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
-      CASE
-          WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
-          WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.TIPO IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
-          ELSE 'Finalizada'
-      END AS SITUACAO_ATIV,
-      A.DHINCLUSAO,
-      A.DHACEITE,
-      A.DHINICIO,
-      ITE.CODPROD,
-      PRO.DESCRPROD,
-      PRO.REFERENCIA
-    FROM TPRIPROC P
-    INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-    LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
-    LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
-    LEFT JOIN (
-        SELECT NUNOTA, MIN(CODPROD) AS CODPROD
-        FROM TGFITE
-        GROUP BY NUNOTA
-    ) ITE ON ITE.NUNOTA = P.NUNOTA
-    LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
-    ${filtroOp}
-    ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV
-  ) WHERE ROWNUM <= ${TESTE_LIMITE_ROWS}`;
+  return `SELECT TOP ${TESTE_LIMITE_ROWS}
+    COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
+    P.IDIPROC,
+    P.STATUSPROC AS SITUACAO_GERAL,
+    A.IDIATV,
+    A.IDEFX,
+    FX.DESCRICAO AS DESCRICAO_ATIVIDADE,
+    CASE
+        WHEN A.DHACEITE IS NULL THEN 'Aguardando aceite'
+        WHEN (SELECT COUNT(1) FROM TPREIATV E WHERE E.IDIATV = A.IDIATV AND E.TIPO IN ('P', 'T', 'S') AND E.DHFINAL IS NULL) > 0 THEN 'Em andamento'
+        ELSE 'Finalizada'
+    END AS SITUACAO_ATIV,
+    A.DHINCLUSAO,
+    A.DHACEITE,
+    A.DHINICIO,
+    ITE.CODPROD,
+    PRO.DESCRPROD,
+    PRO.REFERENCIA
+FROM TPRIPROC P
+INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
+LEFT JOIN TPREFX FX ON FX.IDEFX = A.IEFX
+LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
+LEFT JOIN (
+    SELECT NUNOTA, MIN(CODPROD) AS CODPROD
+    FROM TGFITE
+    GROUP BY NUNOTA
+) ITE ON ITE.NUNOTA = P.NUNOTA
+LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
+${filtroOp}
+ORDER BY NUMPEDIDO DESC, P.IDIPROC, A.IDIATV`;
 }
 
 // ── Main Handler ─────────────────────────────────────────────────────────────
@@ -165,7 +163,6 @@ function converterParaMap(json) {
 
     const currentOp = resultado[cPed][cOp];
 
-    // Adiciona Atividade com IDEFX (Deduplicada por IDIATV)
     const idAtiv = getString(row, colIndex, "IDIATV");
     if (idAtiv && !currentOp.atividades.some(a => a.id === idAtiv)) {
       currentOp.atividades.push({
@@ -179,7 +176,6 @@ function converterParaMap(json) {
       });
     }
 
-    // Adiciona Produto (Deduplicado)
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd && !currentOp.produtos.some(p => p.codigo === codProd)) {
       currentOp.produtos.push({
