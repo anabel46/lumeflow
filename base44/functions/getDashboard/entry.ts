@@ -57,13 +57,10 @@ async function fetchSankhya(url, options = {}) {
 }
 
 // ── SQL ──────────────────────────────────────────────────────────────────────
-// 🧪 LIMITE DE TESTE: remover o TOP em produção
-const TESTE_LIMITE_ROWS = 50;
-
 function getSql(opId) {
   const filtroOp = opId ? `WHERE P.IDIPROC = ${Number(opId)}` : "";
 
-  return `SELECT TOP ${TESTE_LIMITE_ROWS}
+  return `SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
@@ -163,6 +160,7 @@ function converterParaMap(json) {
 
     const currentOp = resultado[cPed][cOp];
 
+    // Adiciona Atividade com IDEFX (Deduplicada por IDIATV)
     const idAtiv = getString(row, colIndex, "IDIATV");
     if (idAtiv && !currentOp.atividades.some(a => a.id === idAtiv)) {
       currentOp.atividades.push({
@@ -176,6 +174,7 @@ function converterParaMap(json) {
       });
     }
 
+    // Adiciona Produto (Deduplicado)
     const codProd = getLong(row, colIndex, "CODPROD");
     if (codProd && !currentOp.produtos.some(p => p.codigo === codProd)) {
       currentOp.produtos.push({
