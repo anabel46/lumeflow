@@ -57,7 +57,7 @@ async function fetchSankhya(url, options = {}) {
 }
 
 // ── SQL ──────────────────────────────────────────────────────────────────────
-// 🧪 LIMITE DE TESTE: remover o TOP e usar a query original em produção
+// 🧪 LIMITE DE TESTE: remover o TOP em produção
 const TESTE_LIMITE_ROWS = 50;
 
 function getSql(opId) {
@@ -83,7 +83,7 @@ function getSql(opId) {
     PRO.REFERENCIA
 FROM TPRIPROC P
 INNER JOIN TPRIATV A ON A.IDIPROC = P.IDIPROC
-LEFT JOIN TPREFX FX ON FX.IDEFX = A.IEFX
+LEFT JOIN TPREFX FX ON FX.IDEFX = A.IDEFX
 LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN (
     SELECT NUNOTA, MIN(CODPROD) AS CODPROD
