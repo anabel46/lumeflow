@@ -288,13 +288,25 @@ export default function Production() {
   const handleStatusFilter = (v) => { setStatusFilter(v); setPage(1); };
   const handleSearch = (v) => { setSearch(v); setPage(1); };
 
-  // Sync with Sankhya
+  // Sync with Sankhya (por lotes iterativos)
   const handleSync = async () => {
     setSyncing(true);
     setSyncResult(null);
+    let totalInserted = 0, totalUpdated = 0, totalErrors = 0;
     try {
-      const res = await base44.functions.invoke("sankhyaSyncOps", {});
-      setSyncResult(res.data);
+      let offset = 0;
+      let done = false;
+      while (!done) {
+        const res = await base44.functions.invoke("sankhyaSyncBatch", { offset, batch_size: 80 });
+        const data = res.data;
+        if (!data.success) throw new Error(data.error || "Erro desconhecido");
+        totalInserted += data.inserted;
+        totalUpdated += data.updated;
+        totalErrors += data.errors;
+        setSyncResult({ inserted: totalInserted, updated: totalUpdated, errors: totalErrors, processed: data.processed, total: data.total });
+        done = data.done;
+        offset = data.next_offset;
+      }
       queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
     } catch (err) {
       setSyncResult({ error: err.message });
@@ -419,7 +431,9 @@ export default function Production() {
             <p className={cn("text-[11px]", syncResult.error ? "text-destructive" : "text-emerald-600")}>
               {syncResult.error
                 ? `Erro: ${syncResult.error}`
-                : `✓ ${syncResult.inserted ?? 0} inseridas · ${syncResult.updated ?? 0} atualizadas`}
+                : syncing
+                  ? `Sincronizando... ${syncResult.processed ?? 0}/${syncResult.total ?? "?"} OPs`
+                  : `✓ ${syncResult.inserted ?? 0} inseridas · ${syncResult.updated ?? 0} atualizadas`}
             </p>
           )}
         </div>

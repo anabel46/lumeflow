@@ -19,8 +19,6 @@ async function refreshToken() {
     throw new Error("Variáveis Sankhya ausentes");
 
   const body = new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret });
-
-  // ✅ Timeout de 15s no auth
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15_000);
   try {
@@ -43,7 +41,6 @@ async function refreshToken() {
   }
 }
 
-// ✅ Timeout configurável por chamada (padrão 30s)
 async function fetchSankhya(url, options = {}, timeoutMs = 30_000) {
   const token = await getValidToken();
   const makeHeaders = (t) => ({
@@ -51,10 +48,8 @@ async function fetchSankhya(url, options = {}, timeoutMs = 30_000) {
     "Authorization": `Bearer ${t}`,
     "Content-Type": "application/json",
   });
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
     let res = await fetch(url, { ...options, headers: makeHeaders(token), signal: controller.signal });
     if (res.status === 401) {
@@ -63,14 +58,13 @@ async function fetchSankhya(url, options = {}, timeoutMs = 30_000) {
     }
     return res;
   } catch (err) {
-    if (err.name === "AbortError") throw new Error(`Timeout na chamada Sankhya (${timeoutMs / 1000}s): ${url}`);
+    if (err.name === "AbortError") throw new Error(`Timeout na chamada Sankhya (${timeoutMs / 1000}s)`);
     throw err;
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function getLong(row, idx, col) {
   const v = row[idx[col.toUpperCase()]];
   if (v === undefined || v === null || v === "") return null;
@@ -87,7 +81,6 @@ function buildIdx(meta) {
   return idx;
 }
 
-// ── Mapeamento setor Sankhya → enum LumeFlow ──────────────────────────────────
 const SETOR_MAP = {
   "ESTAMPARIA": "estamparia",
   "TORNEARIA": "tornearia",
@@ -106,9 +99,36 @@ const SETOR_MAP = {
   "EMBALAGEM": "embalagem",
 };
 
-// ── SQLs ──────────────────────────────────────────────────────────────────────
-// Apenas OPs ativas ou em planejamento criadas nos últimos 12 meses
-const SQL_OPS = `
+function mapStatus(situacao) {
+  const mapa = { "A": "em_producao", "P": "planejamento", "F": "finalizado" };
+  return mapa[situacao] || "planejamento";
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ── Main Handler ──────────────────────────────────────────────────────────────
+// Parâmetros opcionais: { offset: number, batch_size: number }
+// Retorna: { done, next_offset, inserted, updated, errors, total }
+Deno.serve(async (req) => {
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const body = await req.json().catch(() => ({}));
+    const offset = body.offset ?? 0;
+    const batchSize = body.batch_size ?? 80;
+
+    const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
+    const urlSankhya = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
+    const callSankhya = (sql) =>
+      fetchSankhya(urlSankhya, {
+        method: "POST",
+        body: JSON.stringify({ serviceName: "DbExplorerSP.executeQuery", requestBody: { sql } }),
+      }, 25_000).then(r => r.json());
+
+    // Busca OPs ativas/planejamento recentes
+    const SQL_OPS = `
 SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
@@ -128,7 +148,7 @@ WHERE P.STATUSPROC IN ('A', 'P')
   AND P.IDIPROC >= (SELECT MAX(IDIPROC) - 3000 FROM TPRIPROC)
 ORDER BY P.IDIPROC DESC`;
 
-const SQL_FLUXO = `
+    const SQL_FLUXO = `
 SELECT DISTINCT
     P.IDIPROC,
     A.IDEFX,
@@ -147,34 +167,7 @@ WHERE A.IDEFX IS NOT NULL
   AND P.IDIPROC >= (SELECT MAX(IDIPROC) - 3000 FROM TPRIPROC)
 ORDER BY P.IDIPROC, A.IDIATV`;
 
-// ── Status mapping ────────────────────────────────────────────────────────────
-function mapStatus(situacao) {
-  const mapa = { "A": "em_producao", "P": "planejamento", "F": "finalizado" };
-  return mapa[situacao] || "planejamento";
-}
-
-// ── Main Handler ──────────────────────────────────────────────────────────────
-Deno.serve(async (req) => {
-  // ✅ Timeout global de 55s (abaixo do gateway de 60s)
-  const globalController = new AbortController();
-  const globalTimeoutId = setTimeout(() => globalController.abort(), 55_000);
-
-  try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
-    const urlSankhya = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
-
-    // ✅ Timeout de 25s por query SQL no Sankhya
-    const callSankhya = (sql) =>
-      fetchSankhya(urlSankhya, {
-        method: "POST",
-        body: JSON.stringify({ serviceName: "DbExplorerSP.executeQuery", requestBody: { sql } }),
-      }, 25_000).then(r => r.json());
-
-    console.log("🔄 Buscando OPs e fluxo do Sankhya em paralelo...");
+    console.log(`🔄 Buscando dados Sankhya (offset=${offset})...`);
     const [opsRaw, fluxoRaw] = await Promise.all([
       callSankhya(SQL_OPS),
       callSankhya(SQL_FLUXO),
@@ -183,7 +176,7 @@ Deno.serve(async (req) => {
     if (String(opsRaw.status) !== "1") throw new Error(`Erro OPs: ${opsRaw.statusMessage}`);
     if (String(fluxoRaw.status) !== "1") throw new Error(`Erro Fluxo: ${fluxoRaw.statusMessage}`);
 
-    // ── Processa fluxo por IDIPROC ────────────────────────────────────────────
+    // Processa fluxo
     const fluxoPorOp = {};
     if (fluxoRaw.responseBody?.rows) {
       const idx = buildIdx(fluxoRaw.responseBody.fieldsMetadata);
@@ -200,8 +193,7 @@ Deno.serve(async (req) => {
             : statusAtv === "A" ? "Em andamento"
             : "Aguardando";
           fluxoPorOp[idiproc].push({
-            idefx,
-            idiatv,
+            idefx, idiatv,
             descricao: getString(row, idx, "DESCRICAO_FX"),
             setor: SETOR_MAP[descFx] || null,
             situacao_atividade: situacaoAtividade,
@@ -211,24 +203,18 @@ Deno.serve(async (req) => {
       Object.values(fluxoPorOp).forEach(arr => arr.sort((a, b) => a.idiatv - b.idiatv));
     }
 
-    // ── Processa OPs ──────────────────────────────────────────────────────────
+    // Monta lista completa de OPs
     const opsIdx = buildIdx(opsRaw.responseBody.fieldsMetadata);
-    const opsSankhya = [];
+    const allOps = [];
     for (const row of opsRaw.responseBody.rows) {
       const idiproc = getLong(row, opsIdx, "IDIPROC");
       if (!idiproc) continue;
       const idiprocStr = String(idiproc);
       const fluxo = fluxoPorOp[idiprocStr] || [];
-      const production_sequence = fluxo
-        .filter(f => f.setor)
-        .map(f => f.setor)
-        .filter((v, i, arr) => arr.indexOf(v) === i);
-
-      opsSankhya.push({
+      const production_sequence = fluxo.filter(f => f.setor).map(f => f.setor).filter((v, i, arr) => arr.indexOf(v) === i);
+      allOps.push({
         idiproc: idiprocStr,
         numpedido: String(getLong(row, opsIdx, "NUMPEDIDO") || ""),
-        situacao: getString(row, opsIdx, "SITUACAO_GERAL"),
-        codprod: getLong(row, opsIdx, "CODPROD"),
         descrprod: getString(row, opsIdx, "DESCRPROD"),
         referencia: getString(row, opsIdx, "REFERENCIA"),
         status: mapStatus(getString(row, opsIdx, "SITUACAO_GERAL")),
@@ -237,34 +223,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`📦 OPs Sankhya: ${opsSankhya.length}`);
+    const total = allOps.length;
+    const batch = allOps.slice(offset, offset + batchSize);
+    console.log(`📦 Total OPs: ${total} | Processando ${offset}–${offset + batch.length}`);
 
-    // ── Busca registros existentes no LumeFlow ────────────────────────────────
-    const existingRecords = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 999);
+    // Busca existentes apenas para o lote atual
+    const existingRecords = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 9999);
     const existingByIdiproc = {};
     for (const rec of existingRecords) {
       const key = rec.idiproc || rec.unique_number;
-      if (!existingByIdiproc[key]) existingByIdiproc[key] = [];
-      existingByIdiproc[key].push(rec);
+      existingByIdiproc[key] = rec;
     }
-    console.log(`📋 Registros existentes: ${existingRecords.length}`);
 
-    // ── Sincroniza sequencialmente com pequeno delay ──────────────────────────
     let inserted = 0, updated = 0, errors = 0;
 
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-    for (let i = 0; i < opsSankhya.length; i++) {
-      if (globalController.signal.aborted) {
-        console.warn("⚠️ Timeout global atingido, interrompendo sincronização");
-        break;
-      }
-
-      const op = opsSankhya[i];
+    for (const op of batch) {
       try {
-        const existing = existingByIdiproc[op.idiproc] || [];
-        const record = existing[0] || null;
-
+        const record = existingByIdiproc[op.idiproc] || null;
         const payload = {
           idiproc:             op.idiproc,
           unique_number:       op.idiproc,
@@ -285,53 +260,62 @@ Deno.serve(async (req) => {
             production_sequence: payload.production_sequence,
             sankhya_fluxo:       payload.sankhya_fluxo,
           });
-          for (let d = 1; d < existing.length; d++) {
-            await base44.asServiceRole.entities.ProductionOrder.delete(existing[d].id).catch(() => {});
-          }
           updated++;
         } else {
           await base44.asServiceRole.entities.ProductionOrder.create({ ...payload, quantity: 1 });
           inserted++;
         }
+        await sleep(150);
       } catch (err) {
         if (err.message?.includes("Rate limit")) {
-          // Espera 2s e tenta novamente
-          await sleep(2000);
-          i--; // retry
-          continue;
+          await sleep(3000);
+          // Tenta novamente
+          try {
+            const record = existingByIdiproc[op.idiproc] || null;
+            if (record) {
+              await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
+                status: op.status, product_name: op.descrprod || "—",
+                reference: op.referencia || "", sankhya_fluxo: op.fluxo_detalhado,
+              });
+              updated++;
+            } else {
+              await base44.asServiceRole.entities.ProductionOrder.create({
+                idiproc: op.idiproc, unique_number: op.idiproc,
+                order_number: op.numpedido, order_id: op.numpedido,
+                product_name: op.descrprod || "—", reference: op.referencia || "",
+                status: op.status, production_sequence: op.production_sequence,
+                sankhya_fluxo: op.fluxo_detalhado, quantity: 1,
+              });
+              inserted++;
+            }
+          } catch {
+            errors++;
+          }
+        } else {
+          console.error(`❌ Erro OP ${op.idiproc}:`, err.message);
+          errors++;
         }
-        console.error(`❌ Erro OP ${op.idiproc}:`, err.message);
-        errors++;
       }
-
-      // Delay entre cada operação para respeitar rate limit (~3 ops/s)
-      await sleep(300);
     }
 
-    const aborted = globalController.signal.aborted;
-    const msg = aborted
-      ? `Sincronização parcial (timeout 55s): ${inserted} inseridas, ${updated} atualizadas, ${errors} erros`
-      : `Sincronização concluída: ${inserted} inseridas, ${updated} atualizadas, ${errors} erros`;
-    console.log(aborted ? "⚠️" : "✅", msg);
+    const done = offset + batch.length >= total;
+    const next_offset = done ? null : offset + batch.length;
+
+    console.log(`✅ Lote concluído: ${inserted} inseridas, ${updated} atualizadas, ${errors} erros | done=${done}`);
 
     return Response.json({
       success: true,
-      partial: aborted,
-      message: msg,
+      done,
+      next_offset,
       inserted,
       updated,
       errors,
-      total: opsSankhya.length,
+      total,
+      processed: offset + batch.length,
     });
 
   } catch (error) {
-    const isTimeout = error.message?.includes("Timeout");
-    console.error("❌ Erro sync-ops:", error.message);
-    return Response.json(
-      { error: error.message, timeout: isTimeout },
-      { status: isTimeout ? 504 : 500 }
-    );
-  } finally {
-    clearTimeout(globalTimeoutId);
+    console.error("❌ Erro sankhyaSyncBatch:", error.message);
+    return Response.json({ error: error.message }, { status: 500 });
   }
 });
