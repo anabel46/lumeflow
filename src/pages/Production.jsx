@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Search, Play, Pause, ChevronDown, CheckSquare,
-  X, List, Layers, Trash2, Ban, ChevronLeft, ChevronRight, AlertTriangle
+  X, List, Layers, Trash2, Ban, ChevronLeft, ChevronRight, AlertTriangle,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -186,6 +187,8 @@ export default function Production() {
   const [viewMode, setViewMode] = useState("cards");
   const [page, setPage] = useState(1);
   const [confirmDialog, setConfirmDialog] = useState(null); // { type: 'delete'|'cancel', op }
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
   const queryClient = useQueryClient();
   const now = new Date();
 
@@ -204,6 +207,24 @@ export default function Production() {
       if (!pedidosMap[numeroPedido]) pedidosMap[numeroPedido] = {};
       const situacaoGeral = po.status === "planejamento" ? "P" : po.status === "em_producao" ? "A" : "F";
       const numeroOpDisplay = po.idiproc || po.unique_number;
+
+      // Usa sankhya_fluxo se disponível (dados reais da API), senão usa production_sequence local
+      let atividades;
+      if (po.sankhya_fluxo && po.sankhya_fluxo.length > 0) {
+        atividades = po.sankhya_fluxo.map(f => ({
+          id: f.idefx,
+          descricao: f.descricao || f.setor || "",
+          situacao: f.situacao_atividade || "Aguardando",
+        }));
+      } else {
+        atividades = (po.production_sequence || []).map(setor => ({
+          descricao: setor,
+          situacao: setor === po.current_sector ? "Em andamento"
+            : po.current_step_index > (po.production_sequence || []).indexOf(setor) ? "Finalizada"
+            : "Aguardando"
+        }));
+      }
+
       pedidosMap[numeroPedido][numeroOpDisplay] = {
         id: po.id,
         numeroOp: numeroOpDisplay,
@@ -211,12 +232,7 @@ export default function Production() {
         numeroPedido,
         situacaoGeral,
         produtos: [{ descricao: po.product_name, referencia: po.reference }],
-        atividades: (po.production_sequence || []).map(setor => ({
-          descricao: setor,
-          situacao: setor === po.current_sector ? "Em andamento"
-            : po.current_step_index > (po.production_sequence || []).indexOf(setor) ? "Finalizada"
-            : "Aguardando"
-        }))
+        atividades,
       };
       totalOps++;
       if (situacaoGeral === "P") aguardando++;
@@ -271,6 +287,21 @@ export default function Production() {
   // Reset page on filter/search change
   const handleStatusFilter = (v) => { setStatusFilter(v); setPage(1); };
   const handleSearch = (v) => { setSearch(v); setPage(1); };
+
+  // Sync with Sankhya
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await base44.functions.invoke("sankhyaSyncOps", {});
+      setSyncResult(res.data);
+      queryClient.invalidateQueries({ queryKey: ["productionOrders"] });
+    } catch (err) {
+      setSyncResult({ error: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Actions
   const handleStart = async (op) => {
@@ -368,9 +399,30 @@ export default function Production() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Produção</h1>
-        <p className="text-sm text-muted-foreground">Planejamento e controle de ordens de produção</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Produção</h1>
+          <p className="text-sm text-muted-foreground">Planejamento e controle de ordens de produção</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={syncing}
+            className="gap-2 h-8 text-xs"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
+            {syncing ? "Sincronizando..." : "Sincronizar Sankhya"}
+          </Button>
+          {syncResult && (
+            <p className={cn("text-[11px]", syncResult.error ? "text-destructive" : "text-emerald-600")}>
+              {syncResult.error
+                ? `Erro: ${syncResult.error}`
+                : `✓ ${syncResult.inserted ?? 0} inseridas · ${syncResult.updated ?? 0} atualizadas`}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Status tabs + view mode toggle */}

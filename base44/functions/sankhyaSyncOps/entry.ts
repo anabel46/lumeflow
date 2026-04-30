@@ -131,7 +131,8 @@ SELECT DISTINCT
     P.IDIPROC,
     A.IDEFX,
     A.IDIATV,
-    FX.DESCRICAO AS DESCRICAO_FX
+    FX.DESCRICAO AS DESCRICAO_FX,
+    A.STATUSATV  AS SITUACAO_ATIVIDADE
 FROM TPRIPROC P
 INNER JOIN TPRIATV A  ON A.IDIPROC = P.IDIPROC
 LEFT  JOIN TPREFX  FX ON FX.IDEFX  = A.IDEFX
@@ -187,11 +188,16 @@ Deno.serve(async (req) => {
         if (!idiproc || !idefx) continue;
         if (!fluxoPorOp[idiproc]) fluxoPorOp[idiproc] = [];
         if (!fluxoPorOp[idiproc].some(f => f.idefx === idefx)) {
+          const statusAtv = getString(row, idx, "SITUACAO_ATIVIDADE").toUpperCase();
+          const situacaoAtividade = statusAtv === "F" ? "Finalizada"
+            : statusAtv === "A" ? "Em andamento"
+            : "Aguardando";
           fluxoPorOp[idiproc].push({
             idefx,
             idiatv,
             descricao: getString(row, idx, "DESCRICAO_FX"),
             setor: SETOR_MAP[descFx] || null,
+            situacao_atividade: situacaoAtividade,
           });
         }
       }
