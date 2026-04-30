@@ -460,66 +460,74 @@ export default function SectorView() {
     queryFn: () => base44.entities.StockItem.list("name", 500),
   });
 
-  // Busca todas as OPs ativas para filtragem por atividade do Sankhya
-  const { data: allSankhyaOrders = [], isLoading: isLoadingSankhya } = useQuery({
-    queryKey: ["all-production-orders-sankhya"],
-    queryFn: () => base44.entities.ProductionOrder.filter({ status: "em_producao" }, "-created_date", 2000),
+  // Busca todas as OPs não-finalizadas para filtragem unificada por setor
+  const { data: allActiveOrders = [], isLoading: isLoadingActive } = useQuery({
+    queryKey: ["all-production-orders-active"],
+    queryFn: async () => {
+      const [emProducao, planejamento] = await Promise.all([
+        base44.entities.ProductionOrder.filter({ status: "em_producao" }, "-created_date", 2000),
+        base44.entities.ProductionOrder.filter({ status: "planejamento" }, "-created_date", 2000),
+      ]);
+      return [...emProducao, ...planejamento];
+    },
     refetchInterval: 15000,
   });
 
-  // OPs com atividade do setor (baseado no sankhya_fluxo)
-  const sankhyaFiltered = React.useMemo(
-    () => filtrarOpsPorSetor(allSankhyaOrders.filter(op => op.sankhya_fluxo?.length > 0), sectorId),
-    [allSankhyaOrders, sectorId]
-  );
-  const hasSankhyaData = sankhyaFiltered.length > 0;
+  // OPs filtradas para este setor:
+  // 1. Se tem sankhya_fluxo → usa keywords de atividade
+  // 2. Se não tem sankhya_fluxo → usa production_sequence como fallback
+  const sectorOrders = React.useMemo(() => {
+    if (sectorId === "expedicao") return []; // expedicao tem lógica própria abaixo
 
-  const { data: productionOrders = [], isLoading: isLoadingLegacy } = useQuery({
-    queryKey: ["sector-orders", sectorId],
+    const withFluxo = allActiveOrders.filter(op => op.sankhya_fluxo?.length > 0);
+    const withoutFluxo = allActiveOrders.filter(op => !op.sankhya_fluxo?.length);
+
+    // Via sankhya_fluxo
+    const fromSankhya = filtrarOpsPorSetor(withFluxo, sectorId);
+
+    // Via production_sequence (fallback)
+    const fromSequence = withoutFluxo
+      .filter(op => (op.production_sequence || []).includes(sectorId))
+      .map(op => ({ ...op, sectorActivity: null }));
+
+    // Merge sem duplicatas
+    const seen = new Set(fromSankhya.map(op => op.id));
+    const merged = [...fromSankhya];
+    fromSequence.forEach(op => { if (!seen.has(op.id)) merged.push(op); });
+
+    return merged;
+  }, [allActiveOrders, sectorId]);
+
+  // Para expedição, mantém lógica original
+  const { data: expedicaoOrders = [], isLoading: isLoadingExpedicao } = useQuery({
+    queryKey: ["sector-orders-expedicao"],
     queryFn: async () => {
-      if (sectorId === "expedicao") {
-        const [direct, all] = await Promise.all([
-          base44.entities.ProductionOrder.filter({ current_sector: "expedicao" }),
-          base44.entities.ProductionOrder.list("-created_date", 500)
-        ]);
-        const separacaoOnly = all.filter(po => {
-          const seq = po.production_sequence;
-          if (!seq || seq.length !== 1) return false;
-          const val = seq[0]?.toLowerCase().trim();
-          return (val === "separacao" || val === "separação") && po.status !== "finalizado";
-        });
-        const combined = [...direct];
-        separacaoOnly.forEach(po => {
-          if (!combined.some(d => d.id === po.id)) combined.push(po);
-        });
-        return combined;
-      }
-      return base44.entities.ProductionOrder.filter({ current_sector: sectorId });
+      const [direct, all] = await Promise.all([
+        base44.entities.ProductionOrder.filter({ current_sector: "expedicao" }),
+        base44.entities.ProductionOrder.list("-created_date", 500)
+      ]);
+      const separacaoOnly = all.filter(po => {
+        const seq = po.production_sequence;
+        if (!seq || seq.length !== 1) return false;
+        const val = seq[0]?.toLowerCase().trim();
+        return (val === "separacao" || val === "separação") && po.status !== "finalizado";
+      });
+      const combined = [...direct];
+      separacaoOnly.forEach(po => {
+        if (!combined.some(d => d.id === po.id)) combined.push(po);
+      });
+      return combined;
     },
-    refetchInterval: 5000,
+    refetchInterval: 10000,
+    enabled: sectorId === "expedicao",
   });
 
-  const isLoading = isLoadingSankhya || isLoadingLegacy;
+  const productionOrders = sectorId === "expedicao" ? expedicaoOrders : sectorOrders;
+  const isLoading = isLoadingActive || (sectorId === "expedicao" && isLoadingExpedicao);
 
   const { data: allOrders = [] } = useQuery({
     queryKey: ["orders"],
     queryFn: () => base44.entities.Order.list("-created_date", 500),
-  });
-
-  const { data: allRelevantOrders = [] } = useQuery({
-    queryKey: ["sector-passed-orders", sectorId],
-    queryFn: async () => {
-      if (hasSankhyaData) return []; // com Sankhya, não usamos logs de passagem
-      const logs = await base44.entities.SectorLog.filter({ sector: sectorId, action: "saida" });
-      if (!logs.length) return [];
-      const poIds = [...new Set(logs.map(l => l.production_order_id))];
-      const results = await Promise.all(
-        poIds.map(id => base44.entities.ProductionOrder.filter({ id }).then(r => r?.[0]).catch(() => null))
-      );
-      return results.filter(Boolean).filter(po => po.current_sector !== sectorId);
-    },
-    refetchInterval: 5000,
-    enabled: !hasSankhyaData,
   });
 
   const invalidateAll = () => {
@@ -760,28 +768,31 @@ export default function SectorView() {
       po.reference?.toLowerCase().includes(search.toLowerCase())
     );
 
-  // Classificação via Sankhya (atividades) ou fallback por sector_status
+  // Classificação unificada: usa sectorActivity (do sankhya_fluxo) se disponível,
+  // senão classifica por sector_status do registro
   const { returns, waiting, inProgress, doneAll } = useMemo(() => {
-    if (hasSankhyaData) {
-      const searched = filterOrders(sankhyaFiltered);
-      const classified = classificarOpsPorStatus(searched);
-      return {
-        returns: classified.returns,
-        waiting: classified.waiting,
-        inProgress: classified.inProgress,
-        doneAll: classified.done,
-      };
-    }
-    // Fallback: lógica original por sector_status
-    const wait = filterOrders(productionOrders.filter(po => !po.sector_status || po.sector_status === "aguardando"));
-    const inProg = filterOrders(productionOrders.filter(po => po.sector_status === "em_producao"));
-    const doneHere = filterOrders(productionOrders.filter(po => po.sector_status === "concluido"));
-    const passed = filterOrders(allRelevantOrders);
-    const done = [...doneHere, ...passed.filter(p => !doneHere.some(d => d.id === p.id))];
-    const ret = filterOrders(productionOrders.filter(po => po.return_from_sector?.has_issues));
-    return { returns: ret, waiting: wait, inProgress: inProg, doneAll: done };
+    const searched = filterOrders(productionOrders);
+
+    // OPs que têm sectorActivity (via sankhya_fluxo) usam classificação por situacao_atividade
+    const withActivity = searched.filter(op => op.sectorActivity);
+    const withoutActivity = searched.filter(op => !op.sectorActivity);
+
+    const classified = classificarOpsPorStatus(withActivity);
+
+    // OPs sem sectorActivity: classifica por sector_status
+    const fallbackReturns = withoutActivity.filter(po => po.return_from_sector?.has_issues);
+    const fallbackWaiting = withoutActivity.filter(po => !po.return_from_sector?.has_issues && (!po.sector_status || po.sector_status === "aguardando"));
+    const fallbackInProg  = withoutActivity.filter(po => po.sector_status === "em_producao");
+    const fallbackDone    = withoutActivity.filter(po => po.sector_status === "concluido");
+
+    return {
+      returns:   [...classified.returns,   ...fallbackReturns],
+      waiting:   [...classified.waiting,   ...fallbackWaiting],
+      inProgress:[...classified.inProgress,...fallbackInProg],
+      doneAll:   [...classified.done,      ...fallbackDone],
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasSankhyaData, sankhyaFiltered, productionOrders, allRelevantOrders, search]);
+  }, [productionOrders, search]);
 
   // Group by order
   const groupByOrder = (pos) => {
@@ -802,12 +813,14 @@ export default function SectorView() {
     return Object.values(map);
   };
 
-  const activeSource = hasSankhyaData
-    ? filterOrders(sankhyaFiltered.filter(op => {
-        const sit = (op.sectorActivity?.situacao_atividade || op.sectorActivity?.situacao || "").toLowerCase();
-        return sit !== "finalizada" && sit !== "f" && !op.return_from_sector?.has_issues;
-      }))
-    : filterOrders(productionOrders.filter(po => po.sector_status !== "concluido"));
+  const activeSource = filterOrders(productionOrders.filter(op => {
+    if (op.return_from_sector?.has_issues) return false;
+    if (op.sectorActivity) {
+      const sit = (op.sectorActivity.situacao_atividade || "").toLowerCase();
+      return sit !== "finalizada" && sit !== "f";
+    }
+    return op.sector_status !== "concluido";
+  }));
   const activeGroups = groupByOrder(activeSource);
   const doneGroups = groupByOrder(doneAll);
 
@@ -823,11 +836,9 @@ export default function SectorView() {
           <div>
             <h1 className="text-2xl font-bold">{sectorLabel}</h1>
             <p className="text-sm text-muted-foreground">
-              {hasSankhyaData
-                ? `${activeGroups.length} pedido(s) · ${sankhyaFiltered.length} OPs via Sankhya`
-                : isAssembly || (!isIndividual && !isMesa && !isEmbalagem)
-                  ? `${activeGroups.length} pedidos · ${productionOrders.length} OPs`
-                  : `${productionOrders.length} ordens`} neste setor
+              {isAssembly || (!isIndividual && !isMesa && !isEmbalagem)
+                ? `${activeGroups.length} pedidos · ${productionOrders.length} OPs`
+                : `${productionOrders.length} ordens`} neste setor
             </p>
           </div>
         </div>
