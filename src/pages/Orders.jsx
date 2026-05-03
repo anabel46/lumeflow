@@ -10,18 +10,39 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Eye, Filter, X, Ban, Trash2, AlertTriangle, ChevronDown, ChevronUp, ShieldCheck, RefreshCw } from "lucide-react";
+import { Plus, Search, Eye, Filter, X, Ban, Trash2, AlertTriangle, ChevronDown, ChevronUp, ShieldCheck, RefreshCw, Factory } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS, PURCHASE_LOCATIONS } from "@/lib/constants";
 import OrderForm from "@/components/orders/OrderForm";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useSankhyaData } from "@/hooks/useSankhyaData";
 import SankhyaOpBadge from "@/components/sankhya/SankhyaOpBadge";
 
 export default function Orders() {
   const { getOpsByPedido, loading: sankhyaLoading } = useSankhyaData();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const { data: productionOrders = [] } = useQuery({
+    queryKey: ["productionOrders-orders-page"],
+    queryFn: () => base44.entities.ProductionOrder.list("-created_date", 9999),
+    staleTime: 30000,
+  });
+
+  const opStatsByOrder = useMemo(() => {
+    const map = {};
+    productionOrders.forEach(po => {
+      const num = po.order_number;
+      if (!num) return;
+      if (!map[num]) map[num] = { total: 0, em_producao: 0, finalizado: 0, planejamento: 0 };
+      map[num].total++;
+      if (po.status === "em_producao") map[num].em_producao++;
+      else if (po.status === "finalizado") map[num].finalizado++;
+      else map[num].planejamento++;
+    });
+    return map;
+  }, [productionOrders]);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
 
@@ -270,6 +291,17 @@ export default function Orders() {
                           {STATUS_LABELS[order.status] || order.status}
                         </Badge>
                         <SankhyaOpBadge ops={getOpsByPedido(order.order_number)} loading={sankhyaLoading} />
+                        {opStatsByOrder[order.order_number] && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+                            <span className="font-medium text-foreground">{opStatsByOrder[order.order_number].total} OPs</span>
+                            {opStatsByOrder[order.order_number].em_producao > 0 && (
+                              <span className="text-blue-600">· {opStatsByOrder[order.order_number].em_producao} prod.</span>
+                            )}
+                            {opStatsByOrder[order.order_number].finalizado > 0 && (
+                              <span className="text-emerald-600">· {opStatsByOrder[order.order_number].finalizado} fin.</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="p-4">
@@ -279,6 +311,16 @@ export default function Orders() {
                             <Eye className="w-4 h-4" />
                           </Button>
                         </Link>
+                        {opStatsByOrder[order.order_number] && (
+                          <Button
+                            variant="ghost" size="sm"
+                            className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                            title="Ver OPs no Produção"
+                            onClick={() => navigate(`/producao?pedido=${order.order_number}`)}
+                          >
+                            <Factory className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" className="h-8 px-2 text-xs"
                           onClick={() => setEditingOrder(order)}>
                           Editar
