@@ -233,6 +233,7 @@ export default function Production() {
         numeroOp: numeroOpDisplay,
         idiproc: po.idiproc,
         numeroPedido,
+        order_number: po.order_number,
         situacaoGeral,
         produtos: [{ descricao: po.product_name, referencia: po.reference }],
         atividades,
@@ -263,7 +264,8 @@ export default function Production() {
         if (!op.numeroOp?.toString().includes(s) &&
           !product?.descricao?.toLowerCase().includes(s) &&
           !product?.referencia?.toLowerCase().includes(s) &&
-          !op.numeroPedido?.toString().includes(s)) return false;
+          !op.numeroPedido?.toString().includes(s) &&
+          !op.order_number?.toString().includes(s)) return false;
       }
       return true;
     });

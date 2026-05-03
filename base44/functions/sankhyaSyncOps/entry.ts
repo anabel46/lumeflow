@@ -279,6 +279,8 @@ Deno.serve(async (req) => {
 
         if (record) {
           await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
+            order_number:        payload.order_number,
+            order_id:            payload.order_id,
             status:              payload.status,
             product_name:        payload.product_name,
             reference:           payload.reference,
