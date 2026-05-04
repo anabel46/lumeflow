@@ -27,6 +27,7 @@ const mainNav = [
   { path: "/agendamento", label: "Agendamento", icon: Calendar },
   { path: "/expedicao", label: "Expedição", icon: Truck },
   { path: "/reserva-tecnica", label: "Reserva Técnica", icon: Briefcase },
+  { path: "/apontamentos", label: "Apontamentos", icon: ClipboardList },
   { path: "/relatorios", label: "Relatórios", icon: FileText },
   { path: "/administracao", label: "Administração", icon: UserCog },
   { path: "/sankhya-explorer", label: "Explorador Sankhya", icon: Database },

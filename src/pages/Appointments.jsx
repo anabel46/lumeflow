@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, ClipboardCheck, Clock, TrendingUp, AlertCircle, ChevronDown } from "lucide-react";
-import { format, startOfDay, parseISO } from "date-fns";
+import { Plus, Search, ClipboardCheck, Clock, TrendingUp, AlertCircle } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { SECTOR_LABELS, SECTORS } from "@/lib/constants";
@@ -88,7 +88,6 @@ export default function Appointments() {
     return matchSearch && matchSector;
   });
 
-  // Group by date
   const grouped = filtered.reduce((acc, a) => {
     const key = a.date || format(new Date(a.created_date), "yyyy-MM-dd");
     if (!acc[key]) acc[key] = [];
@@ -97,7 +96,6 @@ export default function Appointments() {
   }, {});
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
-  // Summary stats
   const totalProduced = appointments.reduce((s, a) => s + (a.quantity_produced || 0), 0);
   const totalWork = appointments.reduce((s, a) => s + (a.work_time_minutes || 0), 0);
   const totalDowntime = appointments.reduce((s, a) => s + (a.downtime_minutes || 0), 0);
@@ -105,7 +103,6 @@ export default function Appointments() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Apontamentos de Produção</h1>
@@ -116,7 +113,6 @@ export default function Appointments() {
         </Button>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-card rounded-2xl border p-4">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Produzido</p>
@@ -142,7 +138,6 @@ export default function Appointments() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -159,7 +154,6 @@ export default function Appointments() {
         </Select>
       </div>
 
-      {/* List grouped by date */}
       {sortedDates.length === 0 ? (
         <div className="bg-card rounded-2xl border p-12 text-center text-muted-foreground">
           <ClipboardCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -220,7 +214,6 @@ export default function Appointments() {
         </div>
       )}
 
-      {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Novo Apontamento de Produção</DialogTitle></DialogHeader>
@@ -290,21 +283,6 @@ export default function Appointments() {
                 </Select>
               </div>
             </div>
-
-            {/* Live efficiency preview */}
-            {(form.work_time_minutes > 0 || form.downtime_minutes > 0) && (
-              <div className={cn(
-                "rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2",
-                ((form.work_time_minutes / (form.work_time_minutes + (form.downtime_minutes || 0))) * 100) >= 90
-                  ? "bg-emerald-50 text-emerald-800"
-                  : ((form.work_time_minutes / (form.work_time_minutes + (form.downtime_minutes || 0))) * 100) >= 70
-                  ? "bg-amber-50 text-amber-800"
-                  : "bg-red-50 text-red-800"
-              )}>
-                <TrendingUp className="w-4 h-4" />
-                Eficiência estimada: {((form.work_time_minutes / (form.work_time_minutes + (form.downtime_minutes || 0))) * 100).toFixed(0)}%
-              </div>
-            )}
 
             <div>
               <Label>Observações</Label>

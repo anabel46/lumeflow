@@ -1,14 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// ── Token Manager (cópia de getDashboard) ────────────────────────────────────
+// ── Token Manager ─────────────────────────────────────────────────────────────
 const MARGIN_MS = 60_000;
 let _cachedToken = null;
 let _expiresAt = 0;
 
 async function getValidToken() {
-  if (_cachedToken && Date.now() < _expiresAt - MARGIN_MS) {
-    return _cachedToken;
-  }
+  if (_cachedToken && Date.now() < _expiresAt - MARGIN_MS) return _cachedToken;
   return refreshToken();
 }
 
@@ -17,31 +15,15 @@ async function refreshToken() {
   const clientId = Deno.env.get("SANKHYA_CLIENT_ID");
   const clientSecret = Deno.env.get("SANKHYA_CLIENT_SECRET");
   const xToken = Deno.env.get("SANKHYA_X_TOKEN");
-
-  if (!oauthUrl || !clientId || !clientSecret || !xToken) {
-    throw new Error("Variáveis Sankhya ausentes no .env");
-  }
-
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
-
+  if (!oauthUrl || !clientId || !clientSecret || !xToken)
+    throw new Error("Variáveis Sankhya ausentes");
+  const body = new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret });
   const res = await fetch(oauthUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "X-Token": xToken,
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Token": xToken },
     body: body.toString(),
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Auth Sankhya falhou (${res.status}): ${text}`);
-  }
-
+  if (!res.ok) throw new Error(`Auth Sankhya falhou: ${await res.text()}`);
   const data = await res.json();
   _cachedToken = data.access_token;
   _expiresAt = Date.now() + data.expires_in * 1000;
@@ -50,35 +32,33 @@ async function refreshToken() {
 
 async function fetchSankhya(url, options = {}) {
   const token = await getValidToken();
-
-  const makeHeaders = (t) => ({
-    ...(options.headers || {}),
-    "Authorization": `Bearer ${t}`,
-    "Content-Type": "application/json",
-  });
-
-  let res = await fetch(url, { 
-    ...options, 
-    headers: makeHeaders(token) 
-  });
-
-  if (res.status === 401) {
-    _cachedToken = null;
-    const fresh = await refreshToken();
-    res = await fetch(url, { 
-      ...options, 
-      headers: makeHeaders(fresh) 
-    });
-  }
-
+  const makeHeaders = (t) => ({ ...(options.headers || {}), "Authorization": `Bearer ${t}`, "Content-Type": "application/json" });
+  let res = await fetch(url, { ...options, headers: makeHeaders(token) });
+  if (res.status === 401) { _cachedToken = null; res = await fetch(url, { ...options, headers: makeHeaders(await refreshToken()) }); }
   return res;
 }
 
-// ── Filtro de OP mínima (ajustar conforme necessário) ────────────────────────
-const OP_MINIMA = 45000;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getLong(row, idx, col) {
+  const v = row[idx[col.toUpperCase()]];
+  if (v == null || v === "") return null;
+  const cleaned = String(v).trim().replace(/\D/g, "");
+  return cleaned === "" ? null : (isNaN(Number(cleaned)) ? null : Number(cleaned));
+}
+function getString(row, idx, col) {
+  const v = row[idx[col.toUpperCase()]];
+  return (v == null) ? "" : String(v).trim();
+}
 
-// ── SQL Query ────────────────────────────────────────────────────────────────
-const SQL_OPERACOES = `SELECT
+// ── Status mapping ────────────────────────────────────────────────────────────
+function mapearStatus(situacao) {
+  const mapa = { "A": "em_producao", "P": "planejamento", "F": "finalizado" };
+  return mapa[situacao] || "planejamento";
+}
+
+// ── SQL ───────────────────────────────────────────────────────────────────────
+const SQL_OPS = `
+SELECT
     COALESCE(CAB.NUMPEDIDO, P.NUNOTA) AS NUMPEDIDO,
     P.IDIPROC,
     P.STATUSPROC AS SITUACAO_GERAL,
@@ -90,273 +70,120 @@ LEFT JOIN TGFCAB CAB ON CAB.NUNOTA = P.NUNOTA
 LEFT JOIN TGFITE ITE ON ITE.NUNOTA = P.NUNOTA
 LEFT JOIN TGFPRO PRO ON PRO.CODPROD = ITE.CODPROD
 WHERE P.STATUSPROC IN ('A', 'P', 'F')
-AND P.IDIPROC >= ${OP_MINIMA}
+  AND P.IDIPROC >= (SELECT MAX(IDIPROC) - 3000 FROM TPRIPROC)
 GROUP BY P.IDIPROC, P.STATUSPROC, CAB.NUMPEDIDO, P.NUNOTA
 ORDER BY P.IDIPROC ASC`;
 
-// ── Sync Function ───────────────────────────────────────────────────────────
+// ── Main Handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
-    const debugLog = [];
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
 
-    // Pode ser invocado via automation (sem user) ou manualmente
-    debugLog.push("🔄 Iniciando sincronização Sankhya → Base44...");
-    console.log("🔄 Iniciando sincronização Sankhya → Base44...", new Date().toISOString());
-
-    // 1. Busca dados do Sankhya
     const baseUrl = Deno.env.get("SANKHYA_BASE_URL");
     if (!baseUrl) throw new Error("SANKHYA_BASE_URL não configurada");
 
     const url = `${baseUrl}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`;
 
-    // ── Busca única com maxResults (filtro de OP mínima já no SQL) ───────────
-    const t0 = Date.now();
     const res = await fetchSankhya(url, {
       method: "POST",
-      body: JSON.stringify({
-        serviceName: "DbExplorerSP.executeQuery",
-        requestBody: { sql: SQL_OPERACOES, maxResults: 50000 },
-      }),
+      body: JSON.stringify({ serviceName: "DbExplorerSP.executeQuery", requestBody: { sql: SQL_OPS } }),
     });
 
     const json = await res.json();
-    if (String(json.status) !== "1") {
-      throw new Error(`Sankhya erro: ${json.statusMessage}`);
+    if (String(json.status) !== "1") throw new Error(`Sankhya erro: ${json.statusMessage}`);
+
+    const rows = json.responseBody?.rows || [];
+    const meta = json.responseBody?.fieldsMetadata || [];
+    const idx = {};
+    meta.forEach((m, i) => { idx[m.name.toUpperCase()] = i; });
+
+    // Flatten OPs from Sankhya
+    const opsSankhya = [];
+    for (const row of rows) {
+      const idiproc = getLong(row, idx, "IDIPROC");
+      if (!idiproc) continue;
+      opsSankhya.push({
+        idiproc: String(idiproc),
+        numpedido: String(getLong(row, idx, "NUMPEDIDO") || ""),
+        situacao: getString(row, idx, "SITUACAO_GERAL"),
+        descrprod: getString(row, idx, "DESCRPROD"),
+        referencia: getString(row, idx, "REFERENCIA"),
+      });
     }
 
-    const todasLinhas = json.responseBody?.rows || [];
-    const fieldsMetadata = json.responseBody?.fieldsMetadata;
-    debugLog.push(`📦 Linhas brutas recebidas: ${todasLinhas.length} (${Date.now() - t0}ms)`);
-    console.log(`📦 Linhas brutas: ${todasLinhas.length} em ${Date.now() - t0}ms`);
+    console.log(`📦 OPs Sankhya: ${opsSankhya.length}`);
 
-    const pedidosMap = converterParaMap({ responseBody: { rows: todasLinhas, fieldsMetadata } });
-    const totalPedidos = Object.keys(pedidosMap).length;
-    debugLog.push(`✅ Sankhya retornou: ${totalPedidos} pedidos`);
-    console.log("✅ Sankhya retornou:", totalPedidos, "pedidos");
-
-
-
-    // 2. Flatten todas as OPs em lista plana
-    const todasOpsParaSync = [];
-    for (const [numPedido, opsMap] of Object.entries(pedidosMap)) {
-      for (const opData of Object.values(opsMap)) {
-        todasOpsParaSync.push({ numPedido, opData });
+    // Busca registros existentes
+    const existingRecords = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 9999);
+    const existingByIdiproc = {};
+    for (const rec of existingRecords) {
+      const key = rec.idiproc || rec.unique_number;
+      if (key) {
+        if (!existingByIdiproc[key]) existingByIdiproc[key] = [];
+        existingByIdiproc[key].push(rec);
       }
     }
-    debugLog.push(`🔄 Total de OPs para sincronizar: ${todasOpsParaSync.length}`);
 
-    // 3. Buscar todos os registros existentes de uma vez (sem filtro por OP individual)
-    const existingRecords = await base44.asServiceRole.entities.ProductionOrder.list("-created_date", 9999);
-    const existingByUniqueNumber = {};
-    for (const rec of existingRecords) {
-      const key = rec.unique_number;
-      if (!existingByUniqueNumber[key]) existingByUniqueNumber[key] = [];
-      existingByUniqueNumber[key].push(rec);
-    }
-    debugLog.push(`📋 Registros existentes no banco: ${existingRecords.length}`);
+    let inserted = 0, updated = 0, errors = 0;
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-    // 4. Sincroniza em lotes paralelos de 10
-    let insertedCount = 0;
-    let updatedCount = 0;
-    const BATCH_SIZE = 20;
+    for (let i = 0; i < opsSankhya.length; i++) {
+      const op = opsSankhya[i];
+      try {
+        const existing = existingByIdiproc[op.idiproc] || [];
+        const record = existing[0] || null;
+        const status = mapearStatus(op.situacao);
 
-    for (let i = 0; i < todasOpsParaSync.length; i += BATCH_SIZE) {
-      const batch = todasOpsParaSync.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(async ({ numPedido, opData }) => {
-        try {
-          const existing = existingByUniqueNumber[opData.numeroOp.toString()] || [];
-          const record = existing[0] || null;
-
-          if (record) {
-            await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
-              status: mapearStatus(opData.situacaoGeral),
-              idiproc: opData.numeroOp.toString(),
-              reference: opData.produtos?.[0]?.referencia || "",
-              product_name: opData.produtos?.[0]?.descricao || "—",
-            });
-            // Deletar duplicatas
-            for (let d = 1; d < existing.length; d++) {
-              await base44.asServiceRole.entities.ProductionOrder.delete(existing[d].id).catch(() => {});
-            }
-            updatedCount++;
-          } else {
-            await base44.asServiceRole.entities.ProductionOrder.create({
-              unique_number: opData.numeroOp.toString(),
-              idiproc: opData.numeroOp.toString(),
-              order_id: numPedido.toString(),
-              order_number: numPedido.toString(),
-              product_name: opData.produtos?.[0]?.descricao || "—",
-              reference: opData.produtos?.[0]?.referencia || "",
-              quantity: 1,
-              status: mapearStatus(opData.situacaoGeral),
-            });
-            insertedCount++;
+        if (record) {
+          await base44.asServiceRole.entities.ProductionOrder.update(record.id, {
+            status,
+            order_number: op.numpedido || record.order_number,
+            order_id: op.numpedido || record.order_id,
+            product_name: op.descrprod || record.product_name,
+            reference: op.referencia || record.reference,
+          });
+          for (let d = 1; d < existing.length; d++) {
+            await base44.asServiceRole.entities.ProductionOrder.delete(existing[d].id).catch(() => {});
           }
-        } catch (err) {
-          console.error("❌ Erro ao sync OP:", opData?.numeroOp, err?.message);
+          updated++;
+        } else {
+          await base44.asServiceRole.entities.ProductionOrder.create({
+            idiproc: op.idiproc,
+            unique_number: op.idiproc,
+            order_number: op.numpedido,
+            order_id: op.numpedido,
+            product_name: op.descrprod || "—",
+            reference: op.referencia || "",
+            quantity: 1,
+            status,
+          });
+          inserted++;
         }
-      }));
+      } catch (err) {
+        if (err.message?.includes("Rate limit")) {
+          await sleep(2000);
+          i--;
+          continue;
+        }
+        console.error(`❌ Erro OP ${op.idiproc}:`, err.message);
+        errors++;
+      }
+      await sleep(300);
     }
 
-    debugLog.push(`📊 Sincronização concluída: ${insertedCount} inseridas, ${updatedCount} atualizadas`);
+    console.log(`✅ Sync: ${inserted} inseridas, ${updated} atualizadas, ${errors} erros`);
 
     return Response.json({
       success: true,
-      message: `Sincronização concluída: ${insertedCount} inseridas, ${updatedCount} atualizadas`,
-      inserted: insertedCount,
-      updated: updatedCount,
-      debug: debugLog.slice(0, 100),
+      message: `Sincronização concluída: ${inserted} inseridas, ${updated} atualizadas`,
+      inserted,
+      updated,
+      errors,
+      total: opsSankhya.length,
     });
+
   } catch (error) {
     console.error("❌ Erro na sincronização:", error.message);
-    return Response.json({
-      success: false,
-      error: error.message,
-    }, { status: 500 });
+    return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 });
-
-// ── Cleanup: Remove duplicatas ───────────────────────────────────────────────
-export async function removeDuplicateProductionOrders(req) {
-  try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (user?.role !== 'admin') {
-      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
-    const debugLog = [];
-    debugLog.push("🧹 Iniciando limpeza de duplicatas...");
-
-    // Buscar todas as ProductionOrder
-    const allRecords = await base44.asServiceRole.entities.ProductionOrder.list("-updated_date", 1000);
-    debugLog.push(`📊 Total de registros encontrados: ${allRecords.length}`);
-
-    // Agrupar por unique_number
-    const grouped = {};
-    allRecords.forEach(record => {
-      const key = record.unique_number;
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(record);
-    });
-
-    let deletedCount = 0;
-    const duplicateGroups = [];
-
-    // Para cada grupo com duplicatas, manter o mais recente e deletar os demais
-    for (const [uniqueNumber, records] of Object.entries(grouped)) {
-      if (records.length > 1) {
-        duplicateGroups.push({ uniqueNumber, count: records.length });
-        debugLog.push(`⚠️ OP ${uniqueNumber}: ${records.length} registros encontrados`);
-
-        // Ordenar por updated_date DESC (mais recente primeiro) e deletar os demais
-        const sorted = records.sort((a, b) => {
-          const dateA = new Date(a.updated_date || a.created_date).getTime();
-          const dateB = new Date(b.updated_date || b.created_date).getTime();
-          return dateB - dateA;
-        });
-
-        // Manter o primeiro (mais recente) e deletar os demais
-        for (let i = 1; i < sorted.length; i++) {
-          try {
-            await base44.asServiceRole.entities.ProductionOrder.delete(sorted[i].id);
-            deletedCount++;
-            debugLog.push(`  🗑️ Deletado: ${sorted[i].id} (${sorted[i].unique_number})`);
-          } catch (err) {
-            debugLog.push(`  ❌ Erro ao deletar ${sorted[i].id}: ${err.message}`);
-          }
-        }
-      }
-    }
-
-    debugLog.push(`✅ Limpeza concluída: ${deletedCount} duplicatas removidas de ${duplicateGroups.length} OPs`);
-
-    return Response.json({
-      success: true,
-      message: `Limpeza concluída: ${deletedCount} duplicatas removidas`,
-      duplicateGroups,
-      deleted: deletedCount,
-      debug: debugLog,
-    });
-  } catch (error) {
-    return Response.json({
-      success: false,
-      error: error.message,
-    }, { status: 500 });
-  }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function converterParaMap(json) {
-  const body = json.responseBody;
-  if (!body || !body.rows) return {};
-
-  const rows = body.rows;
-  const meta = body.fieldsMetadata;
-
-  const colIndex = {};
-  for (let i = 0; i < meta.length; i++) {
-    colIndex[meta[i].name.toUpperCase()] = i;
-  }
-
-  const resultadoFinal = {};
-
-  for (const row of rows) {
-    const pedido = getLong(row, colIndex, "NUMPEDIDO");
-    const op = getLong(row, colIndex, "IDIPROC");
-
-    if (pedido == null || op == null) continue;
-
-    const cPed = String(pedido);
-    const cOp = String(op);
-
-    if (!resultadoFinal[cPed]) resultadoFinal[cPed] = {};
-
-    // Uma linha por OP — sem atividades, sem deduplicação de produtos necessária
-    if (!resultadoFinal[cPed][cOp]) {
-      resultadoFinal[cPed][cOp] = {
-        numeroPedido: pedido,
-        numeroOp: op,
-        situacaoGeral: getString(row, colIndex, "SITUACAO_GERAL"),
-        produtos: [{
-          codigo: getLong(row, colIndex, "CODPROD"),
-          descricao: getString(row, colIndex, "DESCRPROD"),
-          referencia: getString(row, colIndex, "REFERENCIA"),
-        }],
-        atividades: [],
-      };
-    }
-  }
-
-  return resultadoFinal;
-}
-
-function getNode(row, idx, col) {
-  const i = idx[col.toUpperCase()];
-  return (i !== undefined && i < row.length) ? row[i] : null;
-}
-
-function getLong(row, idx, col) {
-  const v = getNode(row, idx, col);
-  if (v == null || v === "") return null;
-  const cleaned = String(v).trim().replace(/\D/g, "");
-  if (cleaned === "") return null;
-  const n = Number(cleaned);
-  return isNaN(n) ? null : n;
-}
-
-function getString(row, idx, col) {
-  const v = getNode(row, idx, col);
-  return (v == null) ? "" : String(v).trim();
-}
-
-function mapearStatus(situacao) {
-  const mapa = {
-    "A": "em_producao",
-    "P": "planejamento",
-    "F": "finalizado",
-  };
-  return mapa[situacao] || "planejamento";
-}
