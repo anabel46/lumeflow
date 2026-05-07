@@ -25,6 +25,8 @@ import Expedicao from '@/pages/Expedicao';
 import SankhyaExplorer from '@/pages/SankhyaExplorer';
 import BulkApproval from '@/pages/BulkApproval';
 import Appointments from '@/pages/Appointments';
+import Inventory from '@/pages/Inventory';
+import InventoryDetail from '@/pages/InventoryDetail';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -69,6 +71,8 @@ const AuthenticatedApp = () => {
         <Route path="/sankhya-explorer" element={<SankhyaExplorer />} />
         <Route path="/aprovacao-lote" element={<BulkApproval />} />
         <Route path="/apontamentos" element={<Appointments />} />
+        <Route path="/inventario" element={<Inventory />} />
+        <Route path="/inventario/:sessionId" element={<InventoryDetail />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

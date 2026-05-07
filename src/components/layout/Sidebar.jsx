@@ -5,7 +5,7 @@ import {
   ShieldCheck, ChevronLeft, ChevronRight, BookOpen,
   Scissors, Flame, Paintbrush, CircleDot, Palette, Sparkles,
   Zap, Layers, Box, Package as PackageIcon, Cog, Menu, X, Headphones, FileText, UserCog, Briefcase,
-  Truck, Calendar, Store, Database
+  Truck, Calendar, Store, Database, ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTORS } from "@/lib/constants";
@@ -28,6 +28,7 @@ const mainNav = [
   { path: "/expedicao", label: "Expedição", icon: Truck },
   { path: "/reserva-tecnica", label: "Reserva Técnica", icon: Briefcase },
   { path: "/apontamentos", label: "Apontamentos", icon: ClipboardList },
+  { path: "/inventario", label: "Inventário", icon: ClipboardCheck },
   { path: "/relatorios", label: "Relatórios", icon: FileText },
   { path: "/administracao", label: "Administração", icon: UserCog },
   { path: "/sankhya-explorer", label: "Explorador Sankhya", icon: Database },
